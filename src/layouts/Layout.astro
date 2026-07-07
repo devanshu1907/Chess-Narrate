@@ -29,26 +29,67 @@ const {
 		<link rel="preconnect" href="https://fonts.googleapis.com">
 		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 		<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+		<!-- Inline script to set theme early and avoid flash of unstyled content -->
+		<script is:inline>
+			const theme = (() => {
+				if (typeof localStorage !== 'undefined' && localStorage.getItem('theme')) {
+					return localStorage.getItem('theme');
+				}
+				if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+					return 'dark';
+				}
+				return 'light';
+			})();
+			
+			if (theme === 'dark') {
+				document.documentElement.classList.add('dark');
+				document.documentElement.classList.remove('light');
+			} else {
+				document.documentElement.classList.remove('dark');
+				document.documentElement.classList.add('light');
+			}
+		</script>
 	</head>
-	<body class="bg-brand-bg text-brand-text min-h-screen flex flex-col antialiased">
+	<body class="bg-brand-bg text-brand-ink min-h-screen flex flex-col antialiased relative overflow-x-hidden">
+		<!-- Background Mesh Gradient -->
+		<div class="absolute top-0 left-0 w-full h-[65vh] mesh-gradient z-0 pointer-events-none"></div>
+
 		<!-- Skip Link for Accessibility -->
-		<a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 bg-brand-accent text-brand-bg px-4 py-2 rounded-sm font-semibold z-50">
+		<a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 bg-brand-primary text-brand-on-primary px-4 py-2 rounded-sm font-semibold z-50 shadow-lvl2">
 			Skip to content
 		</a>
 
 		<!-- Header Navbar -->
-		<header class="h-16 border-b border-brand-muted/20 bg-brand-bg/85 backdrop-blur-md sticky top-0 z-40 flex items-center px-4 md:px-8">
-			<div class="max-w-7xl w-full mx-auto flex justify-between items-center">
+		<header class="h-16 border-b border-brand-hairline bg-brand-canvas/75 backdrop-blur-md sticky top-0 z-40 flex items-center px-4 md:px-8 shadow-lvl1">
+			<div class="max-w-7xl w-full mx-auto flex justify-between items-center relative z-10">
 				<div class="flex items-center gap-2">
-					<svg aria-hidden="true" class="w-6 h-6 text-brand-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+					<svg aria-hidden="true" class="w-6 h-6 text-brand-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
 						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"></path>
 					</svg>
-					<span class="font-sans font-semibold tracking-tight text-lg text-brand-text">
+					<span class="font-sans font-semibold tracking-tight text-lg text-brand-ink">
 						Chess Narrator<span class="text-brand-accent">.</span>
 					</span>
 				</div>
-				<nav class="flex items-center gap-4">
-					<span class="text-xs font-mono text-brand-muted bg-brand-card/50 border border-brand-muted/10 px-2.5 py-1 rounded-sm">
+				<nav class="flex items-center gap-3">
+					<!-- Theme Toggle Button -->
+					<button 
+						id="theme-toggle" 
+						class="p-1.5 rounded-sm border border-brand-hairline hover:bg-brand-canvas-soft2 text-brand-body hover:text-brand-ink transition-colors focus-visible:ring-2 focus-visible:ring-brand-accent cursor-pointer"
+						aria-label="Toggle dark/light mode"
+						title="Toggle theme"
+					>
+						<!-- Sun icon (for dark mode) -->
+						<svg id="theme-toggle-light-icon" class="w-4 h-4 hidden" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+							<path stroke-linecap="round" stroke-linejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m12.728 0l-.707-.707M6.343 6.343l-.707-.707M12 8a4 4 0 100 8 4 4 0 000-8z"></path>
+						</svg>
+						<!-- Moon icon (for light mode) -->
+						<svg id="theme-toggle-dark-icon" class="w-4 h-4 hidden" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+							<path stroke-linecap="round" stroke-linejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path>
+						</svg>
+					</button>
+
+					<span class="text-xs font-mono text-brand-body bg-brand-canvas-soft2 border border-brand-hairline px-2.5 py-1 rounded-sm select-none">
 						v2.0.0-beta
 					</span>
 				</nav>
@@ -56,16 +97,51 @@ const {
 		</header>
 
 		<!-- Main content -->
-		<main id="main-content" class="flex-grow max-w-7xl w-full mx-auto px-4 md:px-8 py-8 focus:outline-hidden">
+		<main id="main-content" class="flex-grow max-w-7xl w-full mx-auto px-4 md:px-8 py-8 focus:outline-hidden relative z-10">
 			<slot />
 		</main>
 
 		<!-- Footer -->
-		<footer class="border-t border-brand-muted/10 bg-brand-card/20 py-6 text-center text-xs text-brand-muted font-mono">
+		<footer class="border-t border-brand-hairline bg-brand-canvas/30 backdrop-blur-xs py-6 text-center text-xs text-brand-body font-mono relative z-10">
 			<div class="max-w-7xl mx-auto px-4 md:px-8 flex flex-col sm:flex-row justify-between items-center gap-4">
 				<p>AI Chess Narrator. Powered by client-side Stockfish WASM.</p>
-				<p>&copy; {new Date().getFullYear()} Antigravity Build.</p>
+				<p>&copy; {new Date().getFullYear()} Devanshu Yadav. All rights reserved.</p>
 			</div>
 		</footer>
+
+		<!-- Script to handle Theme Toggling logic -->
+		<script>
+			const themeToggleBtn = document.getElementById('theme-toggle');
+			const darkIcon = document.getElementById('theme-toggle-dark-icon');
+			const lightIcon = document.getElementById('theme-toggle-light-icon');
+
+			function updateIcons() {
+				const isDark = document.documentElement.classList.contains('dark');
+				if (isDark) {
+					lightIcon?.classList.remove('hidden');
+					darkIcon?.classList.add('hidden');
+				} else {
+					darkIcon?.classList.remove('hidden');
+					lightIcon?.classList.add('hidden');
+				}
+			}
+
+			// Run on initialization
+			updateIcons();
+
+			themeToggleBtn?.addEventListener('click', () => {
+				const isDark = document.documentElement.classList.contains('dark');
+				if (isDark) {
+					document.documentElement.classList.remove('dark');
+					document.documentElement.classList.add('light');
+					localStorage.setItem('theme', 'light');
+				} else {
+					document.documentElement.classList.add('dark');
+					document.documentElement.classList.remove('light');
+					localStorage.setItem('theme', 'dark');
+				}
+				updateIcons();
+			});
+		</script>
 	</body>
 </html>

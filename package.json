@@ -21,5 +21,9 @@
     "react": "^19.2.7",
     "react-chessboard": "^5.10.0",
     "react-dom": "^19.2.7"
+  },
+  "optionalDependencies": {
+    "@rolldown/binding-linux-x64-gnu": "1.1.4",
+    "@rolldown/binding-win32-x64-msvc": "1.1.4"
   }
 }

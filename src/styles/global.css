@@ -1,31 +1,214 @@
 @import "tailwindcss";
 
 @theme {
-  --color-brand-bg: oklch(0.15 0 0);
-  --color-brand-card: oklch(0.22 0.01 0);
-  --color-brand-accent: oklch(0.6 0.2 250);
-  --color-brand-text: oklch(0.95 0.01 0);
-  --color-brand-muted: oklch(0.70 0.01 0);
+  /* Vercel Primitives (Light mode defaults) */
+  --color-brand-bg: #fafafa;
+  --color-brand-canvas: #ffffff;
+  --color-brand-canvas-soft: #fafafa;
+  --color-brand-canvas-soft2: #f5f5f5;
+  --color-brand-ink: #171717;
+  --color-brand-body: #4d4d4d;
+  --color-brand-mute: #888888;
+  --color-brand-hairline: #ebebeb;
+  --color-brand-hairline-strong: #a1a1a1;
+  --color-brand-primary: #171717;
+  --color-brand-on-primary: #ffffff;
+  --color-brand-accent: #0070f3;
+  --color-brand-success: #0070f3;
+  --color-brand-danger: #ee0000;
+  --color-brand-danger-soft: #f7d4d6;
+  --color-brand-warning: #f5a623;
+  --color-brand-warning-soft: #ffefcf;
 
-  /* Additional semantic tokens */
-  --color-success: oklch(0.65 0.15 140);
-  --color-danger: oklch(0.55 0.18 25);
-
+  /* Font Families */
   --font-sans: "Inter", system-ui, -apple-system, sans-serif;
   --font-mono: "JetBrains Mono", monospace;
 
+  /* Border Radii */
+  --radius-xs: 4px;
   --radius-sm: 6px;
   --radius-md: 8px;
   --radius-lg: 12px;
+  --radius-xl: 16px;
   --radius-pill: 100px;
+}
+
+:root {
+  color-scheme: light dark;
+}
+
+/* Dark mode overrides (system preference fallback, or manual .dark class) */
+@media (prefers-color-scheme: dark) {
+  :root:not(.light) {
+    --color-brand-bg: #000000;
+    --color-brand-canvas: #0a0a0a;
+    --color-brand-canvas-soft: #000000;
+    --color-brand-canvas-soft2: #111111;
+    --color-brand-ink: #ededed;
+    --color-brand-body: #a0a0a0;
+    --color-brand-mute: #666666;
+    --color-brand-hairline: #1f1f1f;
+    --color-brand-hairline-strong: #444444;
+    --color-brand-primary: #ffffff;
+    --color-brand-on-primary: #000000;
+    --color-brand-accent: #0070f3;
+  }
+}
+
+.dark {
+  --color-brand-bg: #000000;
+  --color-brand-canvas: #0a0a0a;
+  --color-brand-canvas-soft: #000000;
+  --color-brand-canvas-soft2: #111111;
+  --color-brand-ink: #ededed;
+  --color-brand-body: #a0a0a0;
+  --color-brand-mute: #666666;
+  --color-brand-hairline: #1f1f1f;
+  --color-brand-hairline-strong: #444444;
+  --color-brand-primary: #ffffff;
+  --color-brand-on-primary: #000000;
+  --color-brand-accent: #0070f3;
+}
+
+.light {
+  --color-brand-bg: #fafafa;
+  --color-brand-canvas: #ffffff;
+  --color-brand-canvas-soft: #fafafa;
+  --color-brand-canvas-soft2: #f5f5f5;
+  --color-brand-ink: #171717;
+  --color-brand-body: #4d4d4d;
+  --color-brand-mute: #888888;
+  --color-brand-hairline: #ebebeb;
+  --color-brand-hairline-strong: #a1a1a1;
+  --color-brand-primary: #171717;
+  --color-brand-on-primary: #ffffff;
+  --color-brand-accent: #0070f3;
 }
 
 body {
   background-color: var(--color-brand-bg);
-  @apply bg-brand-bg text-brand-text min-h-screen antialiased font-sans;
+  color: var(--color-brand-ink);
+  @apply min-h-screen antialiased font-sans transition-colors duration-300;
 }
 
-/* Custom scrollbars for dark mode */
+/* Vercel Mesh Gradient Background */
+.mesh-gradient {
+  background-image: 
+    radial-gradient(at 10% 20%, rgba(0, 124, 240, 0.1) 0px, transparent 50%),
+    radial-gradient(at 90% 10%, rgba(121, 40, 202, 0.1) 0px, transparent 50%),
+    radial-gradient(at 50% 80%, rgba(255, 77, 77, 0.06) 0px, transparent 50%),
+    radial-gradient(at 80% 90%, rgba(249, 203, 40, 0.06) 0px, transparent 50%);
+  filter: blur(80px);
+  pointer-events: none;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not(.light) .mesh-gradient {
+    background-image: 
+      radial-gradient(at 10% 20%, rgba(0, 124, 240, 0.16) 0px, transparent 50%),
+      radial-gradient(at 90% 10%, rgba(121, 40, 202, 0.16) 0px, transparent 50%),
+      radial-gradient(at 50% 80%, rgba(255, 77, 77, 0.12) 0px, transparent 50%),
+      radial-gradient(at 80% 90%, rgba(249, 203, 40, 0.12) 0px, transparent 50%);
+  }
+}
+
+.dark .mesh-gradient {
+  background-image: 
+    radial-gradient(at 10% 20%, rgba(0, 124, 240, 0.16) 0px, transparent 50%),
+    radial-gradient(at 90% 10%, rgba(121, 40, 202, 0.16) 0px, transparent 50%),
+    radial-gradient(at 50% 80%, rgba(255, 77, 77, 0.12) 0px, transparent 50%),
+    radial-gradient(at 80% 90%, rgba(249, 203, 40, 0.12) 0px, transparent 50%);
+}
+
+/* Stacked Shadow Elevation Levels */
+.shadow-lvl1 {
+  box-shadow: 0 0 0 1px var(--color-brand-hairline);
+}
+
+.shadow-lvl2 {
+  box-shadow: 
+    0 0 0 1px var(--color-brand-hairline),
+    0px 1px 1px rgba(0, 0, 0, 0.04), 
+    0px 2px 2px rgba(0, 0, 0, 0.03);
+}
+
+.shadow-lvl3 {
+  box-shadow: 
+    0 0 0 1px var(--color-brand-hairline),
+    0px 2px 2px rgba(0, 0, 0, 0.03), 
+    0px 8px 8px -8px rgba(0, 0, 0, 0.03);
+}
+
+.shadow-lvl4 {
+  box-shadow: 
+    0 0 0 1px var(--color-brand-hairline),
+    0px 2px 2px rgba(0, 0, 0, 0.03), 
+    0px 8px 16px -4px rgba(0, 0, 0, 0.04);
+}
+
+.shadow-lvl5 {
+  box-shadow: 
+    0 0 0 1px var(--color-brand-hairline),
+    0px 1px 1px rgba(0, 0, 0, 0.02), 
+    0px 8px 16px -4px rgba(0, 0, 0, 0.04), 
+    0px 24px 32px -8px rgba(0, 0, 0, 0.05);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not(.light) .shadow-lvl2 {
+    box-shadow: 
+      0 0 0 1px var(--color-brand-hairline),
+      0px 1px 1px rgba(0, 0, 0, 0.3), 
+      0px 2px 2px rgba(0, 0, 0, 0.2);
+  }
+  :root:not(.light) .shadow-lvl3 {
+    box-shadow: 
+      0 0 0 1px var(--color-brand-hairline),
+      0px 2px 2px rgba(0, 0, 0, 0.2), 
+      0px 8px 8px -8px rgba(0, 0, 0, 0.2);
+  }
+  :root:not(.light) .shadow-lvl4 {
+    box-shadow: 
+      0 0 0 1px var(--color-brand-hairline),
+      0px 2px 2px rgba(0, 0, 0, 0.2), 
+      0px 8px 16px -4px rgba(0, 0, 0, 0.25);
+  }
+  :root:not(.light) .shadow-lvl5 {
+    box-shadow: 
+      0 0 0 1px var(--color-brand-hairline),
+      0px 1px 1px rgba(0, 0, 0, 0.15), 
+      0px 8px 16px -4px rgba(0, 0, 0, 0.2), 
+      0px 24px 32px -8px rgba(0, 0, 0, 0.25);
+  }
+}
+
+.dark .shadow-lvl2 {
+  box-shadow: 
+    0 0 0 1px var(--color-brand-hairline),
+    0px 1px 1px rgba(0, 0, 0, 0.3), 
+    0px 2px 2px rgba(0, 0, 0, 0.2);
+}
+.dark .shadow-lvl3 {
+  box-shadow: 
+    0 0 0 1px var(--color-brand-hairline),
+    0px 2px 2px rgba(0, 0, 0, 0.2), 
+    0px 8px 8px -8px rgba(0, 0, 0, 0.2);
+}
+.dark .shadow-lvl4 {
+  box-shadow: 
+    0 0 0 1px var(--color-brand-hairline),
+    0px 2px 2px rgba(0, 0, 0, 0.2), 
+    0px 8px 16px -4px rgba(0, 0, 0, 0.25);
+}
+.dark .shadow-lvl5 {
+  box-shadow: 
+    0 0 0 1px var(--color-brand-hairline),
+    0px 1px 1px rgba(0, 0, 0, 0.15), 
+    0px 8px 16px -4px rgba(0, 0, 0, 0.2), 
+    0px 24px 32px -8px rgba(0, 0, 0, 0.25);
+}
+
+/* Custom scrollbars */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
@@ -34,9 +217,11 @@ body {
   background: var(--color-brand-bg);
 }
 ::-webkit-scrollbar-thumb {
-  background: var(--color-brand-card);
+  background: var(--color-brand-canvas-soft2);
   border-radius: var(--radius-sm);
+  border: 2px solid var(--color-brand-bg);
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--color-brand-muted);
+  background: var(--color-brand-mute);
 }
+
