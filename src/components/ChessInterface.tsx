@@ -93,6 +93,15 @@ export default function ChessInterface() {
   const [error, setError] = useState('');
   const [isPlaying, setIsPlaying] = useState(false);
 
+  // Play vs AI state
+  const [gameMode, setGameMode] = useState<'analysis' | 'play'>('analysis');
+  const [playerColor, setPlayerColor] = useState<'white' | 'black' | 'random'>('white');
+  const [actualPlayerColor, setActualPlayerColor] = useState<'white' | 'black'>('white');
+  const [aiDifficulty, setAiDifficulty] = useState<'easy' | 'medium' | 'hard' | 'master'>('medium');
+  const [isAiThinking, setIsAiThinking] = useState(false);
+  const [gameStatus, setGameStatus] = useState<'active' | 'checkmate' | 'draw' | 'stalemate' | 'resigned'>('active');
+  const [aiEngineStatus, setAiEngineStatus] = useState<'idle' | 'loading' | 'ready' | 'thinking'>('idle');
+
   // Chess board/moves state
   const [positionFen, setPositionFen] = useState(SAMPLE_FEN);
   const [loadedFenStart, setLoadedFenStart] = useState(SAMPLE_FEN);
@@ -120,12 +129,42 @@ export default function ChessInterface() {
   // Refs
   const autoplayTimerRef = useRef<NodeJS.Timeout | null>(null);
   const workerRef = useRef<Worker | null>(null);
+  const aiWorkerRef = useRef<Worker | null>(null);
   const evaluatingFenRef = useRef<string | null>(null);
   const tempScoreRef = useRef<number>(0);
   const tempIsMateRef = useRef<boolean>(false);
   const evalTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastNarratedFenRef = useRef<string | null>(null);
   const lastSettingsRef = useRef({ personality: '', useGemini: false });
+  const handleAiBestMoveRef = useRef<(bestMove: string) => void>(() => {});
+
+  // Initialize AI Stockfish Web Worker
+  useEffect(() => {
+    const aiWorker = new Worker('/stockfish.worker.js');
+    aiWorkerRef.current = aiWorker;
+    setAiEngineStatus('loading');
+
+    aiWorker.onmessage = (e: MessageEvent) => {
+      const line = e.data;
+      if (line === 'readyok') {
+        setAiEngineStatus('ready');
+      }
+
+      // Parse bestmove from AI worker
+      const bestmoveMatch = line.match(/^bestmove\s+(\S+)/);
+      if (bestmoveMatch) {
+        const bestMove = bestmoveMatch[1];
+        handleAiBestMoveRef.current(bestMove);
+      }
+    };
+
+    aiWorker.postMessage('uci');
+    aiWorker.postMessage('isready');
+
+    return () => {
+      aiWorker.terminate();
+    };
+  }, []);
 
   // Load API key from local storage on mount
   useEffect(() => {
@@ -275,6 +314,152 @@ export default function ChessInterface() {
       setEngineStatus('ready');
     }
   };
+
+  // Helper to check if it is the player's turn
+  const getIsPlayersTurn = () => {
+    if (gameMode !== 'play') return true;
+    if (gameStatus !== 'active') return false;
+    const tempChess = new Chess(loadedFenStart);
+    for (let i = 0; i <= currentMoveIndex; i++) {
+      tempChess.move(moves[i].san);
+    }
+    const activeColor = tempChess.turn();
+    return (actualPlayerColor === 'white' && activeColor === 'w') || 
+           (actualPlayerColor === 'black' && activeColor === 'b');
+  };
+  const isPlayersTurn = getIsPlayersTurn();
+
+  // Apply AI move on the board
+  const applyAiMove = (bestMove: string) => {
+    if (bestMove === '(none)' || bestMove === 'none') {
+      // AI has no moves, probably checkmate or stalemate
+      return;
+    }
+
+    try {
+      const from = bestMove.slice(0, 2);
+      const to = bestMove.slice(2, 4);
+      const promotion = bestMove.slice(4, 5) || undefined;
+
+      const tempChess = new Chess(loadedFenStart);
+      for (let i = 0; i <= currentMoveIndex; i++) {
+        tempChess.move(moves[i].san);
+      }
+
+      const isOnlyMove = tempChess.moves().length === 1;
+
+      const move = tempChess.move({ from, to, promotion });
+      if (!move) {
+        console.error("AI tried to make invalid move:", bestMove);
+        setIsAiThinking(false);
+        return;
+      }
+
+      const newMove: MoveItem = {
+        san: move.san,
+        from: move.from,
+        to: move.to,
+        piece: move.piece,
+        fen: tempChess.fen(),
+        isOnlyMove,
+      };
+
+      const updatedMoves = [...moves.slice(0, currentMoveIndex + 1), newMove];
+      setMoves(updatedMoves);
+      
+      // Trigger evaluation for this new FEN immediately
+      prioritizeEvaluation(newMove.fen);
+
+      setCurrentMoveIndex(updatedMoves.length - 1);
+      setPositionFen(newMove.fen);
+      setIsAiThinking(false);
+
+      // Check if game is over
+      if (tempChess.isGameOver()) {
+        if (tempChess.isCheckmate()) {
+          setGameStatus('checkmate');
+        } else if (tempChess.isDraw() || tempChess.isStalemate() || tempChess.isThreefoldRepetition() || tempChess.isInsufficientMaterial()) {
+          setGameStatus('draw');
+        }
+      }
+    } catch (e) {
+      console.error("Error applying AI move:", e);
+      setIsAiThinking(false);
+    }
+  };
+
+  // Keep callback ref updated
+  useEffect(() => {
+    handleAiBestMoveRef.current = (bestMove: string) => {
+      applyAiMove(bestMove);
+    };
+  });
+
+  // Trigger AI move search
+  const triggerAiMove = (currentMoves: MoveItem[], currentIndex: number) => {
+    if (!aiWorkerRef.current || isAiThinking || gameStatus !== 'active') return;
+
+    const tempChess = new Chess(loadedFenStart);
+    for (let i = 0; i <= currentIndex; i++) {
+      tempChess.move(currentMoves[i].san);
+    }
+
+    if (tempChess.isGameOver()) return;
+
+    setIsAiThinking(true);
+    setAiEngineStatus('thinking');
+
+    let skillLevel = 6;
+    let depth = 6;
+    switch (aiDifficulty) {
+      case 'easy':
+        skillLevel = 0;
+        depth = 2;
+        break;
+      case 'medium':
+        skillLevel = 6;
+        depth = 6;
+        break;
+      case 'hard':
+        skillLevel = 12;
+        depth = 10;
+        break;
+      case 'master':
+        skillLevel = 20;
+        depth = 15;
+        break;
+    }
+
+    aiWorkerRef.current.postMessage(`setoption name Skill Level value ${skillLevel}`);
+    aiWorkerRef.current.postMessage(`position fen ${tempChess.fen()}`);
+    
+    // Add artificial delay for human-like speed
+    const delay = aiDifficulty === 'easy' ? 400 : (aiDifficulty === 'medium' ? 800 : 0);
+    
+    setTimeout(() => {
+      if (aiWorkerRef.current) {
+        aiWorkerRef.current.postMessage(`go depth ${depth}`);
+      }
+    }, delay);
+  };
+
+  // Listen for turn shifts to trigger AI player
+  useEffect(() => {
+    if (gameMode !== 'play' || gameStatus !== 'active' || isAiThinking) return;
+
+    const tempChess = new Chess(loadedFenStart);
+    for (let i = 0; i <= currentMoveIndex; i++) {
+      tempChess.move(moves[i].san);
+    }
+
+    const activeColor = tempChess.turn();
+    const isPlayersTurn = (actualPlayerColor === 'white' && activeColor === 'w') || 
+                          (actualPlayerColor === 'black' && activeColor === 'b');
+
+    if (!isPlayersTurn && !tempChess.isGameOver()) {
+      triggerAiMove(moves, currentMoveIndex);
+    }
+  }, [currentMoveIndex, moves, gameMode, gameStatus, actualPlayerColor, aiDifficulty]);
 
 
   // Clear autoplay on unmount
@@ -453,6 +638,13 @@ export default function ChessInterface() {
 
     let isCurrent = true;
 
+    const tempChessForEnd = new Chess(loadedFenStart);
+    for (let i = 0; i <= currentMoveIndex; i++) {
+      tempChessForEnd.move(moves[i].san);
+    }
+    const isCheckmate = tempChessForEnd.isCheckmate();
+    const isDraw = tempChessForEnd.isDraw();
+
     const generateCommentary = async () => {
       let response = '';
       if (useGemini && geminiApiKey.trim()) {
@@ -463,10 +655,21 @@ export default function ChessInterface() {
           change / 100, 
           bestMove, 
           narratorPersonality, 
-          geminiApiKey
+          geminiApiKey,
+          isCheckmate,
+          isDraw
         );
       } else {
         response = getWittyCritique(move, narrationQuality as any, change, narratorPersonality);
+        if (isDraw) {
+          const drawComments = {
+            sarcastic: " And it's a draw. Neither of you could find a way to win. Fascinating.",
+            supportive: " The game ended in a draw! A very hard-fought battle by both sides.",
+            grandmaster: " Draw. The position is completely simplified or drawn by rule. Standard resolution.",
+            pirate: " Shiver me timbers, it's a draw! No loot for either of us today!"
+          };
+          response += drawComments[narratorPersonality] || drawComments.sarcastic;
+        }
       }
 
       if (isCurrent) {
@@ -575,6 +778,53 @@ export default function ChessInterface() {
     }
   };
 
+  const handleStartPlayGame = () => {
+    setError('');
+    setIsPlaying(false);
+    
+    let chosenColor: 'white' | 'black' = 'white';
+    if (playerColor === 'random') {
+      chosenColor = Math.random() < 0.5 ? 'white' : 'black';
+    } else {
+      chosenColor = playerColor;
+    }
+    
+    setActualPlayerColor(chosenColor);
+    setBoardOrientation(chosenColor);
+    
+    setMoves([]);
+    const startFen = loadedFenStart || SAMPLE_FEN;
+    setLoadedFenStart(startFen);
+    
+    setEvalCache({});
+    setBestMovesCache({});
+    setEvalQueue([startFen]);
+    
+    setCurrentMoveIndex(-1);
+    setPositionFen(startFen);
+    
+    setGameStatus('active');
+    setIsAiThinking(false);
+    
+    lastNarratedFenRef.current = null;
+  };
+
+  const handleResign = () => {
+    setGameStatus('resigned');
+    setIsPlaying(false);
+    
+    const resignationComments = {
+      sarcastic: "Folding the tent already? I suppose saving yourself the embarrassment is a strategy.",
+      supportive: "It was a tough game, but resigning shows great respect and sportsmanship. Let's analyze and improve!",
+      grandmaster: "A standard decision. The position was lost positional chess. Resignation is the proper etiquette here.",
+      pirate: "Arrr! Ye raised the white flag! Safe voyage back to land, matey!"
+    };
+    
+    const comment = resignationComments[narratorPersonality] || resignationComments.sarcastic;
+    setNarratorText(comment);
+    if (autoSpeak) speakText(comment);
+  };
+
   // Jump to specific index in moves history
   const jumpToMove = (index: number) => {
     setIsPlaying(false);
@@ -590,6 +840,13 @@ export default function ChessInterface() {
 
   // Handle piece drop on board
   const onDrop = (sourceSquare: string, targetSquare: string) => {
+    // Play mode checks
+    if (gameMode === 'play') {
+      if (gameStatus !== 'active') return false;
+      if (isAiThinking) return false;
+      if (!isPlayersTurn) return false;
+    }
+
     try {
       const tempChess = new Chess(loadedFenStart);
       
@@ -625,6 +882,18 @@ export default function ChessInterface() {
 
       setCurrentMoveIndex(updatedMoves.length - 1);
       setPositionFen(newMove.fen);
+
+      // Check if game is over
+      if (gameMode === 'play') {
+        if (tempChess.isGameOver()) {
+          if (tempChess.isCheckmate()) {
+            setGameStatus('checkmate');
+          } else if (tempChess.isDraw() || tempChess.isStalemate() || tempChess.isThreefoldRepetition() || tempChess.isInsufficientMaterial()) {
+            setGameStatus('draw');
+          }
+        }
+      }
+
       return true;
     } catch (e) {
       return false;
@@ -662,9 +931,9 @@ export default function ChessInterface() {
     
     let quality: 'only_move' | 'brilliant' | 'blunder' | 'mistake' | 'dubious' | 'interesting' | 'unclear' | 'excellent' | 'best' | 'good' = 'good';
     let label = 'Good Move';
-    let colorClass = 'text-brand-body';
-    let badgeColor = 'bg-brand-mute';
-    let icon = '';
+    let colorClass = 'text-emerald-600 font-medium';
+    let badgeColor = 'bg-emerald-600/80';
+    let icon = '!';
     
     if (move.isOnlyMove) {
       quality = 'only_move';
@@ -672,7 +941,8 @@ export default function ChessInterface() {
       colorClass = 'text-slate-400 font-semibold';
       badgeColor = 'bg-slate-400';
       icon = '□';
-    } else if (isBestMove && change >= 100) {
+    } else if (isBestMove && (change >= 100 || (isCapture && change >= 50))) {
+      // Brilliant move: top recommendation + substantial improvement or capture sacrifice
       quality = 'brilliant';
       label = 'Brilliant';
       colorClass = 'text-[#26c6da] font-extrabold';
@@ -690,13 +960,15 @@ export default function ChessInterface() {
       colorClass = 'text-amber-500 font-semibold';
       badgeColor = 'bg-amber-500';
       icon = '?';
-    } else if (change <= -35) {
+    } else if (change <= -50) {
+      // Dubious: drop of 50-80 centipawns
       quality = 'dubious';
       label = 'Dubious';
       colorClass = 'text-[#ab47bc] font-semibold';
       badgeColor = 'bg-[#ab47bc]';
       icon = '?!';
-    } else if (change <= -15) {
+    } else if (!isBestMove && (isCheck || isCapture) && change <= -35) {
+      // Interesting: speculative move (check or capture) with some drop but complex
       quality = 'interesting';
       label = 'Interesting';
       colorClass = 'text-[#ec407a] font-semibold';
@@ -719,6 +991,13 @@ export default function ChessInterface() {
       label = 'Best Move';
       colorClass = 'text-emerald-500 font-semibold';
       badgeColor = 'bg-emerald-500';
+      icon = '!';
+    } else {
+      // Good Move fallback: not best move, evaluation change is between -35 and -15
+      quality = 'good';
+      label = 'Good Move';
+      colorClass = 'text-emerald-600 font-medium';
+      badgeColor = 'bg-emerald-600/80';
       icon = '!';
     }
     
@@ -906,10 +1185,10 @@ export default function ChessInterface() {
     const { whiteStats, blackStats } = calculateStats();
     
     const categories = [
-      { key: 'brilliant', label: 'Brilliant (!!)', colorClass: 'text-[#26c6da] font-bold' },
+      { key: 'brilliant', label: 'Brilliant (!!)', colorClass: 'text-[#26c6da] font-extrabold' },
       { key: 'best', label: 'Best Move (!)', colorClass: 'text-emerald-500 font-bold' },
       { key: 'excellent', label: 'Excellent (★)', colorClass: 'text-[#66bb6a] font-bold' },
-      { key: 'good', label: 'Good Move', colorClass: 'text-brand-ink' },
+      { key: 'good', label: 'Good Move (!)', colorClass: 'text-emerald-600 font-medium' },
       { key: 'book', label: 'Book Move (📖)', colorClass: 'text-[#8b5a2b]' },
       { key: 'only_move', label: 'Only Move (□)', colorClass: 'text-slate-400 font-semibold' },
       { key: 'unclear', label: 'Unclear Position (∞)', colorClass: 'text-[#78909c]' },
@@ -1096,7 +1375,38 @@ export default function ChessInterface() {
   const { percent: evalPercent, displayEval } = getEvaluationBarStats();
 
   return (
-    <div className="w-full flex flex-col">
+    <div className="w-full flex flex-col gap-6">
+      {/* Mode Selection Tabs */}
+      <div className="flex gap-2 border-b border-brand-hairline pb-4 select-none">
+        <button
+          onClick={() => {
+            setGameMode('analysis');
+            setGameStatus('active');
+            setIsAiThinking(false);
+          }}
+          className={`px-5 py-2 rounded-pill text-sm font-semibold transition-all focus-visible:ring-2 focus-visible:ring-brand-accent focus-visible:outline-hidden cursor-pointer ${
+            gameMode === 'analysis'
+              ? 'bg-brand-primary text-brand-on-primary shadow-sm'
+              : 'text-brand-body hover:bg-brand-canvas-soft2 border border-transparent'
+          }`}
+        >
+          🛡️ Analysis Board
+        </button>
+        <button
+          onClick={() => {
+            setGameMode('play');
+            handleStartPlayGame();
+          }}
+          className={`px-5 py-2 rounded-pill text-sm font-semibold transition-all focus-visible:ring-2 focus-visible:ring-brand-accent focus-visible:outline-hidden cursor-pointer ${
+            gameMode === 'play'
+              ? 'bg-brand-primary text-brand-on-primary shadow-sm'
+              : 'text-brand-body hover:bg-brand-canvas-soft2 border border-transparent'
+          }`}
+        >
+          🤖 Play Against AI
+        </button>
+      </div>
+
       {/* Game Analysis Progress Bar */}
       {pgnEvalPercent < 100 && (
         <div className="w-full bg-brand-canvas border border-brand-hairline rounded-md p-4 mb-6 shadow-lvl2 select-none animate-pulse">
@@ -1145,7 +1455,7 @@ export default function ChessInterface() {
    
             {/* Chessboard container */}
             <div 
-              className="flex-grow rounded-md overflow-hidden border border-brand-hairline bg-brand-canvas shadow-lvl2 p-2 flex items-center justify-center"
+              className="flex-grow rounded-md overflow-hidden border border-brand-hairline bg-brand-canvas shadow-lvl2 p-2 flex items-center justify-center relative"
             >
               <div className="w-full aspect-square max-h-[460px]">
                 <Chessboard 
@@ -1157,10 +1467,43 @@ export default function ChessInterface() {
                     squareRenderer: CustomSquareRenderer,
                     squareStyles: getCustomSquareStyles(),
                     darkSquareStyle: { backgroundColor: 'var(--color-board-dark)' },
-                    lightSquareStyle: { backgroundColor: 'var(--color-board-light)' }
+                    lightSquareStyle: { backgroundColor: 'var(--color-board-light)' },
+                    arePiecesDraggable: gameMode === 'play' ? (gameStatus === 'active' && !isAiThinking && isPlayersTurn) : true
                   }}
                 />
               </div>
+
+              {/* Game Over Banner Overlay */}
+              {gameMode === 'play' && gameStatus !== 'active' && (
+                <div className="absolute inset-0 bg-brand-canvas/80 backdrop-blur-xs flex flex-col items-center justify-center p-6 text-center select-none animate-fadeIn z-20">
+                  <div className="bg-brand-canvas border border-brand-hairline rounded-md p-6 shadow-lvl5 max-w-xs flex flex-col gap-4">
+                    <div className="flex flex-col gap-1">
+                      <span className="text-xs font-mono uppercase tracking-wider text-brand-mute">Game Over</span>
+                      <h3 className="text-xl font-sans font-bold tracking-tight text-brand-ink">
+                        {gameStatus === 'checkmate' && (
+                          (moves.length % 2 === 1) 
+                            ? (actualPlayerColor === 'white' ? 'Victory! You Won' : 'Defeat! AI Won')
+                            : (actualPlayerColor === 'black' ? 'Victory! You Won' : 'Defeat! AI Won')
+                        )}
+                        {gameStatus === 'draw' && 'Draw Game'}
+                        {gameStatus === 'resigned' && 'You Resigned'}
+                      </h3>
+                      <p className="text-xs text-brand-body font-sans mt-1">
+                        {gameStatus === 'checkmate' && 'Checkmate has been delivered on the board.'}
+                        {gameStatus === 'draw' && 'The game ended in a draw (stalemate, repetition, or material).'}
+                        {gameStatus === 'resigned' && 'You surrendered the match.'}
+                      </p>
+                    </div>
+                    
+                    <button
+                      onClick={handleStartPlayGame}
+                      className="w-full py-2 rounded-pill text-xs font-semibold bg-brand-primary text-brand-on-primary hover:opacity-90 transition-opacity focus-visible:ring-2 focus-visible:ring-brand-accent/50 focus-visible:outline-hidden cursor-pointer"
+                    >
+                      Play Again
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -1252,8 +1595,27 @@ export default function ChessInterface() {
         
         {/* Engine Status Bar */}
         <div className="flex justify-between w-full max-w-[500px] mt-2 px-1 text-[11px] font-mono text-brand-body select-none">
-          <span>Status: <span className="text-brand-ink capitalize">{engineStatus}</span></span>
-          {evalQueue.length > 0 && <span className="animate-pulse text-brand-accent font-semibold">Analyzing queue: {evalQueue.length} positions left</span>}
+          {gameMode === 'play' ? (
+            <>
+              <span>Mode: <span className="text-brand-ink">Play vs AI</span></span>
+              {isAiThinking ? (
+                <span className="animate-pulse text-brand-accent font-semibold flex items-center gap-1">
+                  <svg className="animate-spin h-3 w-3 text-brand-accent" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  AI is thinking...
+                </span>
+              ) : (
+                <span className="text-emerald-500 font-semibold">{isPlayersTurn ? 'Your Turn' : "AI's Turn"}</span>
+              )}
+            </>
+          ) : (
+            <>
+              <span>Status: <span className="text-brand-ink capitalize">{engineStatus}</span></span>
+              {evalQueue.length > 0 && <span className="animate-pulse text-brand-accent font-semibold">Analyzing queue: {evalQueue.length} positions left</span>}
+            </>
+          )}
         </div>
 
         {/* Evaluation Line Chart */}
@@ -1433,99 +1795,168 @@ export default function ChessInterface() {
             </div>
           )}
  
-          {/* Tabs for PGN/FEN */}
-          <div className="flex gap-2 border-b border-brand-hairline pb-4 mb-4 select-none">
-            <button
-              onClick={() => {
-                setActiveTab('pgn');
-                setInputText('');
-                setError('');
-              }}
-              className={`px-4 py-1.5 rounded-pill text-xs font-semibold transition-all focus-visible:ring-2 focus-visible:ring-brand-accent focus-visible:outline-hidden ${
-                activeTab === 'pgn'
-                  ? 'bg-brand-primary text-brand-on-primary shadow-xs'
-                  : 'text-brand-body hover:bg-brand-canvas-soft2'
-              }`}
-            >
-              PGN Game
-            </button>
-            <button
-              onClick={() => {
-                setActiveTab('fen');
-                setInputText('');
-                setError('');
-              }}
-              className={`px-4 py-1.5 rounded-pill text-xs font-semibold transition-all focus-visible:ring-2 focus-visible:ring-brand-accent focus-visible:outline-hidden ${
-                activeTab === 'fen'
-                  ? 'bg-brand-primary text-brand-on-primary shadow-xs'
-                  : 'text-brand-body hover:bg-brand-canvas-soft2'
-              }`}
-            >
-              FEN Position
-            </button>
-          </div>
- 
-          {/* Form Area */}
-          <div className="flex flex-col gap-3">
-            <label htmlFor="chess-input" className="text-xs font-mono text-brand-body select-none">
-              Enter {activeTab === 'pgn' ? 'PGN string' : 'FEN string'}…
-            </label>
-            <textarea
-              id="chess-input"
-              rows={4}
-              value={inputText}
-              onChange={(e) => setInputText(e.target.value)}
-              placeholder={
-                activeTab === 'pgn'
-                  ? '1. e4 e5 2. Nf3 Nc6 3. Bc4 Nf6…'
-                  : 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1…'
-              }
-              className="w-full bg-brand-canvas border border-brand-hairline rounded-sm p-3 font-mono text-sm text-brand-ink focus-visible:ring-2 focus-visible:ring-brand-accent focus-visible:outline-hidden transition-all placeholder:text-brand-mute/60"
-              spellCheck={false}
-              autoComplete="off"
-            />
- 
-            {/* Inline Error Alert */}
-            {error && (
-              <div 
-                aria-live="polite" 
-                className="flex items-start gap-2 text-xs text-brand-danger bg-brand-danger/5 border border-brand-danger/20 rounded-sm p-3 font-mono animate-fadeIn"
-              >
-                <svg aria-hidden="true" className="w-4 h-4 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                </svg>
-                <span>{error}</span>
+          {/* Tabs for PGN/FEN or Play vs AI Panel */}
+          {gameMode === 'play' ? (
+            <div className="flex flex-col gap-5">
+              <h3 className="text-xs font-mono font-bold text-brand-ink uppercase tracking-wider select-none">
+                Play vs AI Setup
+              </h3>
+              
+              {/* Play As selection */}
+              <div className="flex flex-col gap-1.5">
+                <span className="text-[11px] font-mono text-brand-body select-none">Play As</span>
+                <div className="flex gap-2">
+                  {(['white', 'black', 'random'] as const).map((color) => (
+                    <button
+                      key={color}
+                      onClick={() => setPlayerColor(color)}
+                      className={`flex-grow px-3 py-1.5 rounded-sm text-xs font-mono capitalize border transition-all cursor-pointer ${
+                        playerColor === color
+                          ? 'border-brand-accent bg-brand-accent/5 text-brand-accent font-semibold shadow-xs'
+                          : 'border-brand-hairline hover:bg-brand-canvas hover:border-brand-hairline-strong text-brand-body'
+                      }`}
+                    >
+                      {color === 'white' ? '⚪ White' : color === 'black' ? '⚫ Black' : '🔀 Random'}
+                    </button>
+                  ))}
+                </div>
               </div>
-            )}
- 
-            {/* Buttons Row */}
-            <div className="flex flex-wrap gap-2 items-center mt-2">
-              <button
-                onClick={() => {
-                  if (activeTab === 'pgn') handleLoadPgn(inputText);
-                  else handleLoadFen(inputText);
-                }}
-                className="px-6 py-2 rounded-pill text-sm font-semibold bg-brand-primary text-brand-on-primary hover:opacity-90 transition-opacity focus-visible:ring-2 focus-visible:ring-brand-accent/50 focus-visible:outline-hidden cursor-pointer"
-              >
-                Load {activeTab === 'pgn' ? 'PGN' : 'FEN'}
-              </button>
- 
-              <button
-                onClick={() => {
-                  if (activeTab === 'pgn') {
-                    setInputText(SAMPLE_PGN);
-                    handleLoadPgn(SAMPLE_PGN);
-                  } else {
-                    setInputText(SAMPLE_FEN);
-                    handleLoadFen(SAMPLE_FEN);
-                  }
-                }}
-                className="px-4 py-2 rounded-pill text-sm font-semibold bg-brand-canvas text-brand-ink border border-brand-hairline hover:bg-brand-canvas-soft2 transition-colors focus-visible:ring-2 focus-visible:ring-brand-accent/50 focus-visible:outline-hidden cursor-pointer"
-              >
-                Load Sample
-              </button>
+
+              {/* Difficulty selection */}
+              <div className="flex flex-col gap-1.5">
+                <span className="text-[11px] font-mono text-brand-body select-none">AI Difficulty</span>
+                <div className="grid grid-cols-2 gap-2">
+                  {(['easy', 'medium', 'hard', 'master'] as const).map((diff) => (
+                    <button
+                      key={diff}
+                      onClick={() => setAiDifficulty(diff)}
+                      className={`px-3 py-1.5 rounded-sm text-xs font-mono capitalize border transition-all cursor-pointer ${
+                        aiDifficulty === diff
+                          ? 'border-brand-accent bg-brand-accent/5 text-brand-accent font-semibold shadow-xs'
+                          : 'border-brand-hairline hover:bg-brand-canvas hover:border-brand-hairline-strong text-brand-body'
+                      }`}
+                    >
+                      {diff}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Controls */}
+              <div className="flex gap-2 pt-2 border-t border-brand-hairline mt-2">
+                <button
+                  onClick={handleStartPlayGame}
+                  className="flex-grow px-4 py-2 rounded-pill text-sm font-semibold bg-brand-primary text-brand-on-primary hover:opacity-90 transition-opacity focus-visible:ring-2 focus-visible:ring-brand-accent/50 focus-visible:outline-hidden cursor-pointer"
+                >
+                  {gameStatus === 'active' && moves.length > 0 ? 'Restart Game' : 'Start Match'}
+                </button>
+                {gameStatus === 'active' && moves.length > 0 && (
+                  <button
+                    onClick={handleResign}
+                    className="px-4 py-2 rounded-pill text-sm font-semibold bg-brand-canvas text-brand-danger border border-brand-danger/20 hover:bg-brand-danger/5 transition-all focus-visible:ring-2 focus-visible:ring-brand-danger/50 focus-visible:outline-hidden cursor-pointer"
+                  >
+                    Resign
+                  </button>
+                )}
+              </div>
             </div>
-          </div>
+          ) : (
+            <>
+              {/* Tabs for PGN/FEN */}
+              <div className="flex gap-2 border-b border-brand-hairline pb-4 mb-4 select-none">
+                <button
+                  onClick={() => {
+                    setActiveTab('pgn');
+                    setInputText('');
+                    setError('');
+                  }}
+                  className={`px-4 py-1.5 rounded-pill text-xs font-semibold transition-all focus-visible:ring-2 focus-visible:ring-brand-accent focus-visible:outline-hidden ${
+                    activeTab === 'pgn'
+                      ? 'bg-brand-primary text-brand-on-primary shadow-xs'
+                      : 'text-brand-body hover:bg-brand-canvas-soft2'
+                  }`}
+                >
+                  PGN Game
+                </button>
+                <button
+                  onClick={() => {
+                    setActiveTab('fen');
+                    setInputText('');
+                    setError('');
+                  }}
+                  className={`px-4 py-1.5 rounded-pill text-xs font-semibold transition-all focus-visible:ring-2 focus-visible:ring-brand-accent focus-visible:outline-hidden ${
+                    activeTab === 'fen'
+                      ? 'bg-brand-primary text-brand-on-primary shadow-xs'
+                      : 'text-brand-body hover:bg-brand-canvas-soft2'
+                  }`}
+                >
+                  FEN Position
+                </button>
+              </div>
+     
+              {/* Form Area */}
+              <div className="flex flex-col gap-3">
+                <label htmlFor="chess-input" className="text-xs font-mono text-brand-body select-none">
+                  Enter {activeTab === 'pgn' ? 'PGN string' : 'FEN string'}…
+                </label>
+                <textarea
+                  id="chess-input"
+                  rows={4}
+                  value={inputText}
+                  onChange={(e) => setInputText(e.target.value)}
+                  placeholder={
+                    activeTab === 'pgn'
+                      ? '1. e4 e5 2. Nf3 Nc6 3. Bc4 Nf6…'
+                      : 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1…'
+                  }
+                  className="w-full bg-brand-canvas border border-brand-hairline rounded-sm p-3 font-mono text-sm text-brand-ink focus-visible:ring-2 focus-visible:ring-brand-accent focus-visible:outline-hidden transition-all placeholder:text-brand-mute/60"
+                  spellCheck={false}
+                  autoComplete="off"
+                />
+     
+                {/* Inline Error Alert */}
+                {error && (
+                  <div 
+                    aria-live="polite" 
+                    className="flex items-start gap-2 text-xs text-brand-danger bg-brand-danger/5 border border-brand-danger/20 rounded-sm p-3 font-mono animate-fadeIn"
+                  >
+                    <svg aria-hidden="true" className="w-4 h-4 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                    <span>{error}</span>
+                  </div>
+                )}
+     
+                {/* Buttons Row */}
+                <div className="flex flex-wrap gap-2 items-center mt-2">
+                  <button
+                    onClick={() => {
+                      if (activeTab === 'pgn') handleLoadPgn(inputText);
+                      else handleLoadFen(inputText);
+                    }}
+                    className="px-6 py-2 rounded-pill text-sm font-semibold bg-brand-primary text-brand-on-primary hover:opacity-90 transition-opacity focus-visible:ring-2 focus-visible:ring-brand-accent/50 focus-visible:outline-hidden cursor-pointer"
+                  >
+                    Load {activeTab === 'pgn' ? 'PGN' : 'FEN'}
+                  </button>
+     
+                  <button
+                    onClick={() => {
+                      if (activeTab === 'pgn') {
+                        setInputText(SAMPLE_PGN);
+                        handleLoadPgn(SAMPLE_PGN);
+                      } else {
+                        setInputText(SAMPLE_FEN);
+                        handleLoadFen(SAMPLE_FEN);
+                      }
+                    }}
+                    className="px-4 py-2 rounded-pill text-sm font-semibold bg-brand-canvas text-brand-ink border border-brand-hairline hover:bg-brand-canvas-soft2 transition-colors focus-visible:ring-2 focus-visible:ring-brand-accent/50 focus-visible:outline-hidden cursor-pointer"
+                  >
+                    Load Sample
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
         </div>
  
         {/* Moves History Card Container */}
@@ -1573,6 +2004,30 @@ function getWittyCritique(
   change: number,
   personality: string
 ) {
+  if (move.san.includes('#')) {
+    const checkmateComments = {
+      sarcastic: [
+        `And that's checkmate. Game over. Go read a book or something.`,
+        `Checkmate. The king is dead, long live the king. Or in this case, just go to the next game.`
+      ],
+      supportive: [
+        `Checkmate! What a beautifully played game. Well done!`,
+        `And there is checkmate! A brilliant finish to a wonderful game.`
+      ],
+      grandmaster: [
+        `Checkmate. A well-executed mating net. The game is concluded.`,
+        `Checkmate. The defense collapsed under precise calculation.`
+      ],
+      pirate: [
+        `Checkmate, matey! The ship has sunk to the bottom of the sea!`,
+        `Ahoy! Checkmate! The enemy captain has surrendered his sword!`
+      ]
+    };
+    const list = checkmateComments[personality] || checkmateComments.sarcastic;
+    const hash = (move.san.charCodeAt(0) || 0) + (move.san.charCodeAt(move.san.length - 1) || 0) + quality.length;
+    return list[hash % list.length];
+  }
+
   const pieceName = {
     p: 'Pawn',
     n: 'Knight',
@@ -1810,7 +2265,9 @@ async function generateGeminiCommentary(
   change: number,
   bestMove: string,
   personality: string,
-  apiKey: string
+  apiKey: string,
+  isCheckmate = false,
+  isDraw = false
 ) {
   const pieceName = {
     p: 'Pawn',
@@ -1821,11 +2278,21 @@ async function generateGeminiCommentary(
     k: 'King'
   }[move.piece] || 'piece';
 
+  let endNote = '';
+  if (isCheckmate) {
+    endNote = ' This move results in CHECKMATE, ending the game. Comment on the final victory or defeat.';
+  } else if (isDraw) {
+    endNote = ' This move results in a DRAW, ending the game. Comment on the split outcome.';
+  } else if (move.san.includes('+')) {
+    endNote = ' This move delivers CHECK to the enemy king.';
+  }
+
   const prompt = `You are a witty chess commentator. Critique the following chess move:
 Move played: ${move.san} (using ${pieceName})
 Move evaluation classification: ${quality.toUpperCase()}
 Evaluation change: ${change > 0 ? '+' : ''}${change.toFixed(2)} pawns
 Stockfish recommended best move was: ${bestMove}
+${endNote}
 
 Please write a witty, strategic, single-sentence critique in the voice of a ${personality} chess commentator.
 Keep it under 25 words. Do not use FEN, centipawns, or technical coordinates in the output. Just comment on the chess move itself in a highly engaging, immersive voice. Make it funny or tactical.`;
