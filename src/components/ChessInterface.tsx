@@ -20,6 +20,7 @@ interface MoveItem {
   to: string;
   piece: string;
   fen: string;
+  isOnlyMove?: boolean;
 }
 
 // Client-side Web Audio synthesized sound effects
@@ -438,19 +439,17 @@ export default function ChessInterface() {
 
     const isWhite = currentMoveIndex % 2 === 0;
     const change = isWhite ? (score_curr - score_prev) : (score_prev - score_curr);
-    
-    // Classify move quality
+    const isBook = isMoveBook(currentMoveIndex, moves);
     const prevFen = currentMoveIndex === 0 ? loadedFenStart : moves[currentMoveIndex - 1]?.fen;
     const bestMove = bestMovesCache[prevFen] || '';
     
-    let quality: 'blunder' | 'mistake' | 'inaccuracy' | 'good' | 'excellent' = 'good';
-    if (change <= -200) quality = 'blunder';
-    else if (change <= -80) quality = 'mistake';
-    else if (change <= -30) quality = 'inaccuracy';
-    else {
-      const isBestMove = bestMove === (move.from + move.to);
-      if (isBestMove || change >= 10) quality = 'excellent';
-    }
+    const qualityInfo = getMoveQualityInfo(currentMoveIndex);
+    const baseQuality = qualityInfo ? qualityInfo.quality : 'good';
+
+    // Map book moves to 'best' or 'good' based on engine evaluation for narration
+    const narrationQuality = isBook 
+      ? (baseQuality === 'excellent' || baseQuality === 'best' ? 'best' : 'good') 
+      : baseQuality;
 
     let isCurrent = true;
 
@@ -460,16 +459,14 @@ export default function ChessInterface() {
         setNarratorText("Consulting Gemini AI's chess wits...");
         response = await generateGeminiCommentary(
           move, 
-          isMoveBook(currentMoveIndex, moves) ? 'book' : quality, 
+          narrationQuality, 
           change / 100, 
           bestMove, 
           narratorPersonality, 
           geminiApiKey
         );
       } else {
-        response = isMoveBook(currentMoveIndex, moves) 
-          ? `A standard opening book move, developing pieces and preparing for early-game strategy.`
-          : getWittyCritique(move, quality, change, narratorPersonality);
+        response = getWittyCritique(move, narrationQuality as any, change, narratorPersonality);
       }
 
       if (isCurrent) {
@@ -504,6 +501,7 @@ export default function ChessInterface() {
       const movesWithFen: MoveItem[] = [];
 
       for (const m of history) {
+        const isOnlyMove = replayChess.moves().length === 1;
         replayChess.move(m.san);
         movesWithFen.push({
           san: m.san,
@@ -511,6 +509,7 @@ export default function ChessInterface() {
           to: m.to,
           piece: m.piece,
           fen: replayChess.fen(),
+          isOnlyMove,
         });
       }
 
@@ -599,6 +598,8 @@ export default function ChessInterface() {
         tempChess.move(moves[i].san);
       }
 
+      const isOnlyMove = tempChess.moves().length === 1;
+
       const move = tempChess.move({
         from: sourceSquare,
         to: targetSquare,
@@ -613,6 +614,7 @@ export default function ChessInterface() {
         to: move.to,
         piece: move.piece,
         fen: tempChess.fen(),
+        isOnlyMove,
       };
 
       const updatedMoves = [...moves.slice(0, currentMoveIndex + 1), newMove];
@@ -638,10 +640,11 @@ export default function ChessInterface() {
     
     if (isMoveBook(index, moves)) {
       return { 
-        quality: 'book' as any, 
+        quality: 'book' as const, 
         label: 'Book Move', 
         colorClass: 'text-[#8b5a2b] font-semibold', 
         badgeColor: 'bg-[#8b5a2b]', 
+        icon: '📖',
         change: 0 
       };
     }
@@ -657,66 +660,95 @@ export default function ChessInterface() {
     const bestMove = bestMovesCache[fen_prev];
     const isBestMove = bestMove === (move.from + move.to);
     
-    let quality: 'blunder' | 'mistake' | 'inaccuracy' | 'good' | 'excellent' = 'good';
+    let quality: 'only_move' | 'brilliant' | 'blunder' | 'mistake' | 'dubious' | 'interesting' | 'unclear' | 'excellent' | 'best' | 'good' = 'good';
     let label = 'Good Move';
     let colorClass = 'text-brand-body';
     let badgeColor = 'bg-brand-mute';
+    let icon = '';
     
-    if (change <= -200) {
+    if (move.isOnlyMove) {
+      quality = 'only_move';
+      label = 'Only Move';
+      colorClass = 'text-slate-400 font-semibold';
+      badgeColor = 'bg-slate-400';
+      icon = '□';
+    } else if (isBestMove && change >= 100) {
+      quality = 'brilliant';
+      label = 'Brilliant';
+      colorClass = 'text-[#26c6da] font-extrabold';
+      badgeColor = 'bg-[#26c6da]';
+      icon = '!!';
+    } else if (change <= -200) {
       quality = 'blunder';
       label = 'Blunder';
       colorClass = 'text-red-500 font-semibold';
       badgeColor = 'bg-red-500';
+      icon = '??';
     } else if (change <= -80) {
       quality = 'mistake';
       label = 'Mistake';
       colorClass = 'text-amber-500 font-semibold';
       badgeColor = 'bg-amber-500';
-    } else if (change <= -30) {
-      quality = 'inaccuracy';
-      label = 'Inaccuracy';
-      colorClass = 'text-yellow-500/90';
-      badgeColor = 'bg-yellow-500';
-    } else if (isBestMove || change >= 10) {
+      icon = '?';
+    } else if (change <= -35) {
+      quality = 'dubious';
+      label = 'Dubious';
+      colorClass = 'text-[#ab47bc] font-semibold';
+      badgeColor = 'bg-[#ab47bc]';
+      icon = '?!';
+    } else if (change <= -15) {
+      quality = 'interesting';
+      label = 'Interesting';
+      colorClass = 'text-[#ec407a] font-semibold';
+      badgeColor = 'bg-[#ec407a]';
+      icon = '!?';
+    } else if (Math.abs(score_curr) <= 100 && !isBestMove && change >= -15 && change <= 15) {
+      quality = 'unclear';
+      label = 'Unclear Position';
+      colorClass = 'text-[#78909c] font-semibold';
+      badgeColor = 'bg-[#78909c]';
+      icon = '∞';
+    } else if (!isBestMove && change >= -15 && change < 0) {
       quality = 'excellent';
-      label = isBestMove ? 'Best Move' : 'Excellent';
+      label = 'Excellent';
+      colorClass = 'text-[#66bb6a] font-semibold';
+      badgeColor = 'bg-[#66bb6a]';
+      icon = '★';
+    } else if (isBestMove || change >= 0) {
+      quality = 'best';
+      label = 'Best Move';
       colorClass = 'text-emerald-500 font-semibold';
       badgeColor = 'bg-emerald-500';
+      icon = '!';
     }
     
-    return { quality, label, colorClass, badgeColor, change: change / 100 };
+    return { quality, label, colorClass, badgeColor, icon, change: change / 100 };
   };
 
   // Helper to calculate summary statistics for white and black
   const calculateStats = () => {
-    const whiteStats = { excellent: 0, good: 0, inaccuracy: 0, mistake: 0, blunder: 0 };
-    const blackStats = { excellent: 0, good: 0, inaccuracy: 0, mistake: 0, blunder: 0 };
+    const whiteStats = { brilliant: 0, best: 0, excellent: 0, good: 0, book: 0, interesting: 0, dubious: 0, mistake: 0, blunder: 0, only_move: 0, unclear: 0 };
+    const blackStats = { brilliant: 0, best: 0, excellent: 0, good: 0, book: 0, interesting: 0, dubious: 0, mistake: 0, blunder: 0, only_move: 0, unclear: 0 };
     
     moves.forEach((move, idx) => {
       const isWhite = idx % 2 === 0;
       const stats = isWhite ? whiteStats : blackStats;
       
       if (isMoveBook(idx, moves)) {
-        stats.good++;
+        stats.book++;
         return;
       }
       
-      const fen_curr = move.fen;
-      const fen_prev = idx === 0 ? loadedFenStart : moves[idx - 1].fen;
-      
-      const score_curr = evalCache[fen_curr];
-      const score_prev = evalCache[fen_prev];
-      
-      if (score_curr !== undefined && score_prev !== undefined) {
-        const change = isWhite ? (score_curr - score_prev) : (score_prev - score_curr);
-        const bestMove = bestMovesCache[fen_prev];
-        const isBestMove = bestMove === (move.from + move.to);
-        
-        if (change <= -200) stats.blunder++;
-        else if (change <= -80) stats.mistake++;
-        else if (change <= -30) stats.inaccuracy++;
-        else if (isBestMove || change >= 10) stats.excellent++;
-        else stats.good++;
+      const qualityInfo = getMoveQualityInfo(idx);
+      if (qualityInfo) {
+        const q = qualityInfo.quality;
+        if (q in stats) {
+          stats[q as keyof typeof stats]++;
+        } else {
+          stats.good++;
+        }
+      } else {
+        stats.good++;
       }
     });
     
@@ -748,19 +780,22 @@ export default function ChessInterface() {
     
     const qualityInfo = getMoveQualityInfo(currentMoveIndex);
     if (qualityInfo) {
-      if (qualityInfo.quality === 'book') {
-        styles[lastMove.to] = { backgroundColor: 'rgba(139, 90, 43, 0.25)' };
-      } else if (qualityInfo.quality === 'excellent') {
-        styles[lastMove.to] = { backgroundColor: 'rgba(16, 185, 129, 0.25)' };
-      } else if (qualityInfo.quality === 'inaccuracy') {
-        styles[lastMove.to] = { backgroundColor: 'rgba(234, 179, 8, 0.25)' };
-      } else if (qualityInfo.quality === 'mistake') {
-        styles[lastMove.to] = { backgroundColor: 'rgba(249, 115, 22, 0.25)' };
-      } else if (qualityInfo.quality === 'blunder') {
-        styles[lastMove.to] = { backgroundColor: 'rgba(239, 68, 68, 0.25)' };
-      } else {
-        styles[lastMove.to] = { backgroundColor: 'rgba(0, 112, 243, 0.25)' };
-      }
+      const highlightColors: Record<string, string> = {
+        book: 'rgba(139, 90, 43, 0.25)',
+        brilliant: 'rgba(38, 198, 218, 0.25)',
+        best: 'rgba(16, 185, 129, 0.25)',
+        excellent: 'rgba(102, 187, 106, 0.25)',
+        only_move: 'rgba(148, 163, 184, 0.25)',
+        unclear: 'rgba(120, 144, 156, 0.25)',
+        interesting: 'rgba(236, 64, 122, 0.25)',
+        dubious: 'rgba(171, 71, 188, 0.25)',
+        mistake: 'rgba(249, 115, 22, 0.25)',
+        blunder: 'rgba(239, 68, 68, 0.25)',
+        good: 'rgba(0, 112, 243, 0.15)',
+      };
+      
+      const bgColor = highlightColors[qualityInfo.quality] || 'rgba(0, 112, 243, 0.25)';
+      styles[lastMove.to] = { backgroundColor: bgColor };
     } else {
       styles[lastMove.to] = { backgroundColor: 'rgba(0, 112, 243, 0.25)' };
     }
@@ -870,6 +905,20 @@ export default function ChessInterface() {
     if (moves.length === 0) return null;
     const { whiteStats, blackStats } = calculateStats();
     
+    const categories = [
+      { key: 'brilliant', label: 'Brilliant (!!)', colorClass: 'text-[#26c6da] font-bold' },
+      { key: 'best', label: 'Best Move (!)', colorClass: 'text-emerald-500 font-bold' },
+      { key: 'excellent', label: 'Excellent (★)', colorClass: 'text-[#66bb6a] font-bold' },
+      { key: 'good', label: 'Good Move', colorClass: 'text-brand-ink' },
+      { key: 'book', label: 'Book Move (📖)', colorClass: 'text-[#8b5a2b]' },
+      { key: 'only_move', label: 'Only Move (□)', colorClass: 'text-slate-400 font-semibold' },
+      { key: 'unclear', label: 'Unclear Position (∞)', colorClass: 'text-[#78909c]' },
+      { key: 'interesting', label: 'Interesting (!?)', colorClass: 'text-[#ec407a]' },
+      { key: 'dubious', label: 'Dubious (?!)', colorClass: 'text-[#ab47bc]' },
+      { key: 'mistake', label: 'Mistake (?)', colorClass: 'text-amber-500' },
+      { key: 'blunder', label: 'Blunder (??)', colorClass: 'text-red-500 font-bold' },
+    ];
+    
     return (
       <div className="mt-4 pt-4 border-t border-brand-hairline">
         <h3 className="text-xs font-mono font-bold text-brand-ink mb-3 uppercase tracking-wider select-none">
@@ -880,30 +929,17 @@ export default function ChessInterface() {
           <div className="text-brand-body text-[10px] uppercase">Category</div>
           <div className="text-right font-semibold text-brand-ink pr-1">Black</div>
           
-          {/* Excellent */}
-          <div className="text-left text-emerald-500 font-bold pl-1">{whiteStats.excellent}</div>
-          <div className="text-brand-body text-[10px]">Excellent / Best</div>
-          <div className="text-right text-emerald-500 font-bold pr-1">{blackStats.excellent}</div>
-
-          {/* Good */}
-          <div className="text-left text-brand-ink pl-1">{whiteStats.good}</div>
-          <div className="text-brand-body text-[10px]">Good</div>
-          <div className="text-right text-brand-ink pr-1">{blackStats.good}</div>
-
-          {/* Inaccuracy */}
-          <div className="text-left text-yellow-500 pl-1">{whiteStats.inaccuracy}</div>
-          <div className="text-brand-body text-[10px]">Inaccuracy</div>
-          <div className="text-right text-yellow-500 pr-1">{blackStats.inaccuracy}</div>
-
-          {/* Mistake */}
-          <div className="text-left text-amber-500 pl-1">{whiteStats.mistake}</div>
-          <div className="text-brand-body text-[10px]">Mistake</div>
-          <div className="text-right text-amber-500 pr-1">{blackStats.mistake}</div>
-
-          {/* Blunder */}
-          <div className="text-left text-red-500 font-bold pl-1">{whiteStats.blunder}</div>
-          <div className="text-brand-body text-[10px] font-semibold text-red-500/80">Blunder</div>
-          <div className="text-right text-red-500 font-bold pr-1">{blackStats.blunder}</div>
+          {categories.map(({ key, label, colorClass }) => (
+            <React.Fragment key={key}>
+              <div className={`text-left pl-1 ${colorClass}`}>
+                {whiteStats[key as keyof typeof whiteStats]}
+              </div>
+              <div className="text-brand-body text-[10px]">{label}</div>
+              <div className={`text-right pr-1 ${colorClass}`}>
+                {blackStats[key as keyof typeof blackStats]}
+              </div>
+            </React.Fragment>
+          ))}
         </div>
       </div>
     );
@@ -1016,60 +1052,34 @@ export default function ChessInterface() {
     };
   };
 
-  // Define CustomSquare to render evaluation favicons/badges directly on the board
-  const CustomSquare = React.useMemo(() => {
-    const Component = React.forwardRef<HTMLDivElement, any>(
-      ({ children, square, squareColor, style }, ref) => {
-        const currentMove = currentMoveIndex !== -1 ? moves[currentMoveIndex] : null;
-        const isDestination = currentMove && currentMove.to === square;
-        
-        let badge = null;
-        if (isDestination) {
-          const qualityInfo = getMoveQualityInfo(currentMoveIndex);
-          if (qualityInfo) {
-            let icon = '';
-            let bgColor = '';
-            
-            if (qualityInfo.quality === 'book') {
-              icon = '📖';
-              bgColor = 'bg-[#8b5a2b]';
-            } else if (qualityInfo.quality === 'excellent') {
-              icon = '★';
-              bgColor = 'bg-emerald-500';
-            } else if (qualityInfo.quality === 'inaccuracy') {
-              icon = '?!';
-              bgColor = 'bg-yellow-500';
-            } else if (qualityInfo.quality === 'mistake') {
-              icon = '?';
-              bgColor = 'bg-orange-500';
-            } else if (qualityInfo.quality === 'blunder') {
-              icon = '??';
-              bgColor = 'bg-red-500';
-            }
-            
-            if (icon && bgColor) {
-              badge = (
-                <div 
-                  className={`absolute top-0.5 right-0.5 z-10 w-4 h-4 md:w-5 md:h-5 rounded-full flex items-center justify-center text-[8px] md:text-[10px] font-bold text-white shadow-md select-none pointer-events-none ${bgColor}`}
-                  title={qualityInfo.label}
-                >
-                  {icon}
-                </div>
-              );
-            }
-          }
-        }
-
-        return (
-          <div ref={ref} style={{ ...style, position: 'relative' }}>
-            {children}
-            {badge}
+  // Define CustomSquareRenderer to render evaluation badges/icons directly on the board
+  const CustomSquareRenderer = React.useCallback(({ piece, square, children }: any) => {
+    const currentMove = currentMoveIndex !== -1 ? moves[currentMoveIndex] : null;
+    const isDestination = currentMove && currentMove.to === square;
+    
+    let badge = null;
+    if (isDestination) {
+      const qualityInfo = getMoveQualityInfo(currentMoveIndex);
+      if (qualityInfo && qualityInfo.icon && qualityInfo.badgeColor) {
+        badge = (
+          <div 
+            className={`absolute top-0.5 right-0.5 z-10 w-4 h-4 md:w-5 md:h-5 rounded-full flex items-center justify-center text-[8px] md:text-[10px] font-bold text-white shadow-md select-none pointer-events-none ${qualityInfo.badgeColor}`}
+            title={qualityInfo.label}
+          >
+            {qualityInfo.icon}
           </div>
         );
       }
+    }
+
+    const highlightStyle = getCustomSquareStyles()[square] || {};
+
+    return (
+      <div style={{ position: 'relative', width: '100%', height: '100%', ...highlightStyle }}>
+        {children}
+        {badge}
+      </div>
     );
-    Component.displayName = 'CustomSquare';
-    return Component;
   }, [currentMoveIndex, moves, evalCache, bestMovesCache]);
 
   // Calculate evaluation progress for loaded PGN games
@@ -1139,14 +1149,16 @@ export default function ChessInterface() {
             >
               <div className="w-full aspect-square max-h-[460px]">
                 <Chessboard 
-                  key={loadedFenStart + boardOrientation}
-                  position={positionFen} 
-                  onPieceDrop={onDrop}
-                  boardOrientation={boardOrientation}
-                  customSquare={CustomSquare}
-                  customSquareStyles={getCustomSquareStyles()}
-                  customDarkSquareStyle={{ backgroundColor: 'var(--color-brand-hairline-strong)' }}
-                  customLightSquareStyle={{ backgroundColor: 'var(--color-brand-canvas)' }}
+                  key={loadedFenStart + boardOrientation + currentMoveIndex}
+                  options={{
+                    position: positionFen,
+                    onPieceDrop: ({ sourceSquare, targetSquare }) => targetSquare ? onDrop(sourceSquare, targetSquare) : false,
+                    boardOrientation: boardOrientation,
+                    squareRenderer: CustomSquareRenderer,
+                    squareStyles: getCustomSquareStyles(),
+                    darkSquareStyle: { backgroundColor: 'var(--color-board-dark)' },
+                    lightSquareStyle: { backgroundColor: 'var(--color-board-light)' }
+                  }}
                 />
               </div>
             </div>
@@ -1557,7 +1569,7 @@ export default function ChessInterface() {
 // ==========================================
 function getWittyCritique(
   move: MoveItem, 
-  quality: 'blunder' | 'mistake' | 'inaccuracy' | 'good' | 'excellent', 
+  quality: 'only_move' | 'brilliant' | 'blunder' | 'mistake' | 'dubious' | 'interesting' | 'unclear' | 'excellent' | 'best' | 'good', 
   change: number,
   personality: string
 ) {
@@ -1589,22 +1601,46 @@ function getWittyCritique(
       `You had better options, but I suppose this one keeps the game... interesting.`,
       `Giving your opponent a free pass. How generous of you!`
     ],
-    inaccuracy: [
-      `A bit passive. The board is screaming for action, and you're just shifting pawns.`,
-      `It's a move, certainly. It occupies space. But did it actually do anything?`,
-      `A minor slip. Your position is fine, but you're letting the advantage slip away.`,
-      `The engine is yawning. You could have pressed the attack more.`
+    dubious: [
+      `Questionable. Very questionable. Are you setting a trap or just hoping for a miracle?`,
+      `The engine is squinting at this move. It smells like a blunder, but feels like hope.`,
+      `A bit sketchy. If your opponent has eyes, you might be in trouble.`
+    ],
+    interesting: [
+      `Ambitious! It's not objectively correct, but it definitely makes things messy.`,
+      `Speculative play. You're throwing gas on the fire, let's see who gets burned.`,
+      `Bold choice. You've complicated the position. I hope you have a plan.`
+    ],
+    unclear: [
+      `A complete mess. The engine says it's equal, but nobody has any idea what's going on.`,
+      `Dynamically balanced chaos. Good luck navigating this minefield.`,
+      `Equal evaluation, but the tension on this board is off the charts.`
     ],
     excellent: [
-      `Magnus? Is that you? That was a masterclass move!`,
-      `An absolute beauty of a move. You saw that line from miles away!`,
-      `The engine is nodding in binary approval. Beautifully played.`,
-      `Perfect tactical execution. That's how we win games!`
+      `A very strong alternative. Not the engine's favorite, but highly respectable.`,
+      `Excellent choice. You're keeping the pressure on with high-level positional play.`,
+      `Very nice. The engine nods in approval of your strategic alternative.`
+    ],
+    best: [
+      `Exactly what the doctor ordered. The absolute best move in the position.`,
+      `Spot on! You found the top engine recommendation.`,
+      `Perfect precision. The engine has nothing to complain about.`
     ],
     good: [
       `Solid move. Keeps the pressure on.`,
       `Good positional play. No complaints from the engine.`,
       `Keeping it simple and effective. A sensible choice.`
+    ],
+    only_move: [
+      `Well, it's not like you had a choice. Literally.`,
+      `Congratulations on finding the single legal move on the board. Groundbreaking.`,
+      `A forced move. Even a random number generator would have got this one right.`
+    ],
+    brilliant: [
+      `Wait, did your mouse slip, or are you actually a genius?`,
+      `A sacrifice? The engine is calculating if you're a madman or a mastermind.`,
+      `Oh! A move so brilliant even I didn't see it coming. Don't let it go to your head.`,
+      `Stockfish is crying tears of joy in binary. Exceptional find!`
     ]
   };
 
@@ -1620,18 +1656,38 @@ function getWittyCritique(
       `This creates a long-term weakness in your pawn structure.`,
       `A passive choice. In this position, you must play dynamically.`
     ],
-    inaccuracy: [
-      `Slightly off-target. The bishop pair would have been more active.`,
-      `Not the most precise move. It allows the opponent to consolidate.`
+    dubious: [
+      `A questionable decision. A disciplined opponent will easily exploit this opening.`,
+      `A speculative choice. Against a strong defender, this will only lead to weakness.`
+    ],
+    interesting: [
+      `An ambitious attempt to complicate the game. Speculative, but highly testing.`,
+      `A bold choice. It creates tactical imbalances that require precise calculation.`
+    ],
+    unclear: [
+      `The position remains highly complex and equal. Neither side has established a clear path.`,
+      `A double-edged position. The evaluation is balanced, but the play is extremely delicate.`
     ],
     excellent: [
-      `A superb positional squeeze. Very high-level chess!`,
-      `Excellent calculation. You've successfully converted the advantage.`,
-      `Brilliant tactical play. You're squeezing the board beautifully.`
+      `A highly favorable alternative. Positional accuracy is very high here.`,
+      `Excellent positional squeeze. Maintaining a strong grip on the key squares.`
+    ],
+    best: [
+      `The most precise continuation. The engine's top choice, maintaining absolute control.`,
+      `Superb accuracy. Finding the required move to press the advantage.`
     ],
     good: [
       `A standard, correct developmental move.`,
       `A sensible trade. Maintains positional equilibrium.`
+    ],
+    only_move: [
+      `A forced response. There was no escape route to avoid the threat.`,
+      `When the king is under check, the path is narrow. This was the only legal option.`
+    ],
+    brilliant: [
+      `A profound, highly intuitive sacrifice. This reminds me of Tal's finest combinations.`,
+      `Extraordinary vision! This move completely disrupts the opponent's defensive structure.`,
+      `Brilliant tactical execution. The sacrifice is fully justified by the dynamic compensation.`
     ]
   };
 
@@ -1646,17 +1702,37 @@ function getWittyCritique(
       `Avast! Ye lost yer bearings with that ${pieceName} move!`,
       `Ye had a treasure map and ye chose to dig in the mud instead!`
     ],
-    inaccuracy: [
-      `A bit slow, ye scallywag! Wind is in yer sails, but ye're not movin'!`,
-      `Not the worst, but ye could've plundered more booty with a better strike!`
+    dubious: [
+      `A sketchy course ye're sailing. Ye might be heading straight for a sandbar!`,
+      `Avast! That move looks like trouble. Are ye trying to bluff the navy?`
+    ],
+    interesting: [
+      `A bold maneuver! Complications ahead! Prepare the cannons!`,
+      `Speculative sailing, matey! It's risky, but it makes for a grand battle!`
+    ],
+    unclear: [
+      `Stormy waters ahead! The map is blank and the compass is spinning!`,
+      `Balanced on the edge of the blade! A wild sea fight!`
     ],
     excellent: [
-      `Arrr! A legendary strike! Ye've shattered their hull!`,
-      `Ahoy! That's how a true pirate plunders! Excellent find!`
+      `A fine alternative course! Squeezing them hard!`,
+      `Excellent sailing. Ye're keeping the pressure on their hull!`
+    ],
+    best: [
+      `The captain's choice! The absolute best line to plunder their loot!`,
+      `A bullseye shot! Exactly what was needed!`
     ],
     good: [
       `Solid sailing, matey. Keep yer eyes on the horizon.`,
       `Ye've secured the deck. A fine crewman's move.`
+    ],
+    only_move: [
+      `Ye had yer back to the mast! There was only one escape route!`,
+      `Only one plank to walk, matey! No other choice!`
+    ],
+    brilliant: [
+      `Shiver me timbers! A legendary strike of genius! The crew is cheering!`,
+      `Arrr! A brilliant sacrifice! Ye've out-navigated them completely!`
     ]
   };
 
@@ -1670,24 +1746,44 @@ function getWittyCritique(
       `A small slip. Let's take a deep breath and look for ways to protect your pieces next turn.`,
       `Not the easiest move to find. You've got this, just stay focused!`
     ],
-    inaccuracy: [
-      `Almost there! A slightly different plan might have been stronger, but your game is still solid.`,
-      `Keep going! You're building good habits, just watch out for opponent's active pieces.`
+    dubious: [
+      `A little risky, but we can work with this! Let's stay focused on defense.`,
+      `A questionable path, but don't worry. Let's see how we can defend together.`
+    ],
+    interesting: [
+      `That's a very creative idea! It makes the game interesting, let's see how it goes!`,
+      `A bold and ambitious move. I love the creativity you're showing!`
+    ],
+    unclear: [
+      `A very complex and balanced position. Take your time, you're doing great!`,
+      `The game is equal but very dynamic. Trust your instincts!`
     ],
     excellent: [
-      `Wow, fantastic vision! You're really seeing the board well.`,
-      `Incredible move! That shows great tactical awareness. Keep it up!`
+      `Excellent alternative! You're playing really solid chess.`,
+      `A wonderful choice. That keeps your position very strong.`
+    ],
+    best: [
+      `Perfect! You found the absolute best move in the position. Excellent job!`,
+      `Spot on! That was the engine's top choice. Keep up the great work!`
     ],
     good: [
       `Great job, very solid move.`,
       `Nice and steady. You're doing great!`
+    ],
+    only_move: [
+      `A forced move, but you played it correctly. Good job staying calm!`,
+      `That was the only legal move. Well done finding it under pressure!`
+    ],
+    brilliant: [
+      `Oh my! That is an absolutely brilliant move! What incredible vision!`,
+      `Wow! You found a beautiful piece sacrifice. That was amazing!`
     ]
   };
 
-  let list = sarcasticComments[quality];
-  if (personality === 'grandmaster') list = grandmasterComments[quality];
-  else if (personality === 'pirate') list = pirateComments[quality];
-  else if (personality === 'supportive') list = supportiveComments[quality];
+  let list = (sarcasticComments[quality] || sarcasticComments.good) as string[];
+  if (personality === 'grandmaster') list = (grandmasterComments[quality] || grandmasterComments.good) as string[];
+  else if (personality === 'pirate') list = (pirateComments[quality] || pirateComments.good) as string[];
+  else if (personality === 'supportive') list = (supportiveComments[quality] || supportiveComments.good) as string[];
 
   // Pick pseudo-random comment based on move details to keep it deterministic but varied
   const hash = (move.san.charCodeAt(0) || 0) + (move.san.charCodeAt(move.san.length - 1) || 0) + quality.length;
@@ -1698,7 +1794,7 @@ function getWittyCritique(
   if (quality === 'blunder' && isCapture) {
     comment += ` And doing it while capturing? Double the confusion.`;
   }
-  if (isCheck && (quality === 'excellent' || quality === 'good')) {
+  if (isCheck && (quality === 'excellent' || quality === 'best' || quality === 'good')) {
     comment += ` Check is always nice to see!`;
   }
 

@@ -19,6 +19,8 @@
   --color-brand-danger-soft: #f7d4d6;
   --color-brand-warning: #f5a623;
   --color-brand-warning-soft: #ffefcf;
+  --color-board-light: #ffffff;
+  --color-board-dark: #a1a1a1;
 
   /* Font Families */
   --font-sans: "Inter", system-ui, -apple-system, sans-serif;
@@ -52,6 +54,8 @@
     --color-brand-primary: #ffffff;
     --color-brand-on-primary: #000000;
     --color-brand-accent: #0070f3;
+    --color-board-light: #94a3b8;
+    --color-board-dark: #475569;
   }
 }
 
@@ -68,6 +72,8 @@
   --color-brand-primary: #ffffff;
   --color-brand-on-primary: #000000;
   --color-brand-accent: #0070f3;
+  --color-board-light: #94a3b8;
+  --color-board-dark: #475569;
 }
 
 .light {
@@ -83,6 +89,8 @@
   --color-brand-primary: #171717;
   --color-brand-on-primary: #ffffff;
   --color-brand-accent: #0070f3;
+  --color-board-light: #ffffff;
+  --color-board-dark: #a1a1a1;
 }
 
 body {
