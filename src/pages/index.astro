@@ -1,11 +1,21 @@
 ---
-import Welcome from '../components/Welcome.astro';
 import Layout from '../layouts/Layout.astro';
-
-// Welcome to Astro! Wondering what to do next? Check out the Astro documentation at https://docs.astro.build
-// Don't want to use any of this? Delete everything in this file, the `assets`, `components`, and `layouts` directories, and start fresh.
+import ChessInterface from '../components/ChessInterface';
 ---
 
-<Layout>
-	<Welcome />
+<Layout title="AI Chess Narrator — Strategic Analysis">
+	<section class="max-w-7xl w-full mx-auto flex flex-col gap-6">
+		<div class="flex flex-col gap-2 max-w-2xl">
+			<h1 class="text-3xl md:text-4xl font-sans font-semibold tracking-tight text-brand-text">
+				Analyze your chess games.
+			</h1>
+			<p class="text-brand-muted text-sm md:text-base leading-relaxed">
+				Upload a FEN string or paste a full PGN game to step through the moves. Client-side engines do the calculations while the Narrator analyzes the story.
+			</p>
+		</div>
+
+		<div class="mt-4">
+			<ChessInterface client:only="react" />
+		</div>
+	</section>
 </Layout>
