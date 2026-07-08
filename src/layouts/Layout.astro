@@ -7,8 +7,8 @@ interface Props {
 }
 
 const { 
-	title = "AI Chess Narrator", 
-	description = "Understand the 'Explanation Gap' in chess games. Stream witty strategic critiques of your blunders narrated by AI." 
+	title = "Chess Analysis & AI Narrator — Free Online Chess Engine Board", 
+	description = "Analyze chess games with our free online chess analysis board. Run local Stockfish engine analysis, upload PGNs, play chess against computer, and get AI narratives." 
 } = Astro.props;
 ---
 
@@ -17,13 +17,33 @@ const {
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width" />
+		<link rel="icon" type="image/png" href="/favicon-96x96.png" sizes="96x96" />
 		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-		<link rel="icon" href="/favicon.ico" />
+		<link rel="shortcut icon" href="/favicon.ico" />
+		<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+		<meta name="apple-mobile-web-app-title" content="Chessate" />
+		<link rel="manifest" href="/site.webmanifest" />
 		<meta name="generator" content={Astro.generator} />
 		
 		<!-- SEO Meta Tags -->
 		<title>{title}</title>
 		<meta name="description" content={description} />
+		<meta name="keywords" content="Chess Analysis, free chess analysis, chess analysis engine, chess analysis board, chess analysis free, online chess analysis, pgn chess analysis, play chess against computer, learn chess openings, stockfish analysis" />
+		<link rel="canonical" href="https://chessnarrator.com" />
+
+		<!-- Open Graph / Facebook -->
+		<meta property="og:type" content="website" />
+		<meta property="og:url" content="https://chessnarrator.com/" />
+		<meta property="og:title" content={title} />
+		<meta property="og:description" content={description} />
+		<meta property="og:image" content="https://chessnarrator.com/og-image.png" />
+
+		<!-- Twitter -->
+		<meta property="twitter:card" content="summary_large_image" />
+		<meta property="twitter:url" content="https://chessnarrator.com/" />
+		<meta property="twitter:title" content={title} />
+		<meta property="twitter:description" content={description} />
+		<meta property="twitter:image" content="https://chessnarrator.com/og-image.png" />
 		
 		<!-- Google Fonts: Inter & JetBrains Mono -->
 		<link rel="preconnect" href="https://fonts.googleapis.com">
@@ -63,15 +83,17 @@ const {
 		<!-- Header Navbar -->
 		<header class="h-16 border-b border-brand-hairline bg-brand-canvas/75 backdrop-blur-md sticky top-0 z-40 flex items-center px-4 md:px-8 shadow-lvl1">
 			<div class="max-w-7xl w-full mx-auto flex justify-between items-center relative z-10">
-				<div class="flex items-center gap-2">
+				<a href="/" class="flex items-center gap-2 hover:opacity-90 transition-opacity">
 					<svg aria-hidden="true" class="w-6 h-6 text-brand-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
 						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"></path>
 					</svg>
 					<span class="font-sans font-semibold tracking-tight text-lg text-brand-ink">
 						Chess Narrator<span class="text-brand-accent">.</span>
 					</span>
-				</div>
-				<nav class="flex items-center gap-3">
+				</a>
+				<nav class="flex items-center gap-3 sm:gap-4">
+					<a href="/about" class="text-xs font-mono text-brand-body hover:text-brand-ink transition-colors">About</a>
+					<a href="/contact" class="text-xs font-mono text-brand-body hover:text-brand-ink transition-colors">Contact</a>
 					<!-- Theme Toggle Button -->
 					<button 
 						id="theme-toggle" 
@@ -102,10 +124,19 @@ const {
 		</main>
 
 		<!-- Footer -->
-		<footer class="border-t border-brand-hairline bg-brand-canvas/30 backdrop-blur-xs py-6 text-center text-xs text-brand-body font-mono relative z-10">
-			<div class="max-w-7xl mx-auto px-4 md:px-8 flex flex-col sm:flex-row justify-between items-center gap-4">
-				<p>AI Chess Narrator. Powered by client-side Stockfish WASM.</p>
-				<p>&copy; {new Date().getFullYear()} Devanshu Yadav. All rights reserved.</p>
+		<footer class="border-t border-brand-hairline bg-brand-canvas/30 backdrop-blur-xs py-6 text-xs text-brand-body font-mono relative z-10">
+			<div class="max-w-7xl mx-auto px-4 md:px-8 flex flex-col md:flex-row justify-between items-center gap-4">
+				<div class="flex flex-col sm:flex-row items-center gap-2 sm:gap-4 text-center md:text-left">
+					<p>AI Chess Narrator. Powered by client-side Stockfish WASM.</p>
+					<p class="hidden sm:inline text-brand-hairline-strong">|</p>
+					<p>&copy; {new Date().getFullYear()} Devanshu Yadav. All rights reserved.</p>
+				</div>
+				<div class="flex flex-wrap gap-x-4 gap-y-2 justify-center text-[11px]">
+					<a href="/about" class="hover:text-brand-ink transition-colors">About Us</a>
+					<a href="/contact" class="hover:text-brand-ink transition-colors">Contact</a>
+					<a href="/terms" class="hover:text-brand-ink transition-colors">Terms</a>
+					<a href="/privacy" class="hover:text-brand-ink transition-colors">Privacy Policy</a>
+				</div>
 			</div>
 		</footer>
 

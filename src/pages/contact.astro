@@ -1,0 +1,108 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+
+<Layout 
+	title="Contact Us | Chess Analysis Feedback" 
+	description="Get in touch with the ChessNarrate team for technical support, feature requests, or developer inquiries."
+>
+	<section class="max-w-2xl mx-auto flex flex-col gap-8 py-4 font-sans select-none">
+		<div class="flex flex-col gap-3">
+			<a href="/" class="text-xs font-mono text-brand-accent hover:underline flex items-center gap-1.5 w-fit">
+				&larr; Back to Analysis Board
+			</a>
+			<h1 class="text-3xl sm:text-4xl font-semibold tracking-tight text-brand-ink mt-2">
+				Contact Us
+			</h1>
+			<p class="text-brand-body text-sm sm:text-base leading-relaxed">
+				Have questions, feedback, or a feature request? Drop us a message below and we will get back to you as soon as possible.
+			</p>
+		</div>
+
+		<hr class="border-brand-hairline" />
+
+		<form id="contact-form" class="bg-brand-canvas border border-brand-hairline rounded-md p-6 shadow-lvl3 flex flex-col gap-4">
+			<div class="flex flex-col gap-1">
+				<label for="user-name" class="text-xs font-mono text-brand-body">Your Name</label>
+				<input
+					id="user-name"
+					type="text"
+					required
+					placeholder="Magnus Carlsen"
+					class="w-full bg-brand-canvas border border-brand-hairline rounded-sm px-3 py-2 text-sm text-brand-ink focus-visible:ring-2 focus-visible:ring-brand-accent focus-visible:outline-hidden transition-all"
+				/>
+			</div>
+
+			<div class="flex flex-col gap-1">
+				<label for="user-email" class="text-xs font-mono text-brand-body">Your Email</label>
+				<input
+					id="user-email"
+					type="email"
+					required
+					placeholder="magnus@carlsen.com"
+					class="w-full bg-brand-canvas border border-brand-hairline rounded-sm px-3 py-2 text-sm text-brand-ink focus-visible:ring-2 focus-visible:ring-brand-accent focus-visible:outline-hidden transition-all"
+				/>
+			</div>
+
+			<div class="flex flex-col gap-1">
+				<label for="message-subject" class="text-xs font-mono text-brand-body">Subject</label>
+				<input
+					id="message-subject"
+					type="text"
+					required
+					placeholder="Feature Request: Stockfish v16 update"
+					class="w-full bg-brand-canvas border border-brand-hairline rounded-sm px-3 py-2 text-sm text-brand-ink focus-visible:ring-2 focus-visible:ring-brand-accent focus-visible:outline-hidden transition-all"
+				/>
+			</div>
+
+			<div class="flex flex-col gap-1">
+				<label for="user-message" class="text-xs font-mono text-brand-body">Message</label>
+				<textarea
+					id="user-message"
+					rows={5}
+					required
+					placeholder="I love the AI Narrator! I would like to request..."
+					class="w-full bg-brand-canvas border border-brand-hairline rounded-sm p-3 text-sm text-brand-ink focus-visible:ring-2 focus-visible:ring-brand-accent focus-visible:outline-hidden transition-all"
+				/>
+			</div>
+
+			<div id="form-status" aria-live="polite" class="hidden text-xs font-mono p-3 rounded-sm border"></div>
+
+			<button
+				type="submit"
+				class="w-full py-2.5 rounded-pill text-sm font-semibold bg-brand-primary text-brand-on-primary hover:opacity-90 transition-opacity focus-visible:ring-2 focus-visible:ring-brand-accent/50 focus-visible:outline-hidden cursor-pointer mt-2"
+			>
+				Send Message
+			</button>
+		</form>
+	</section>
+
+	<script is:inline>
+		const form = document.getElementById('contact-form');
+		const statusDiv = document.getElementById('form-status');
+
+		form?.addEventListener('submit', (e) => {
+			e.preventDefault();
+			
+			// Simple validation check
+			const name = document.getElementById('user-name').value;
+			const email = document.getElementById('user-email').value;
+			const subject = document.getElementById('message-subject').value;
+			const message = document.getElementById('user-message').value;
+
+			if (name && email && subject && message) {
+				// Show mock success message
+				statusDiv.classList.remove('hidden', 'text-brand-danger', 'bg-brand-danger/5', 'border-brand-danger/20');
+				statusDiv.classList.add('block', 'text-emerald-500', 'bg-emerald-500/5', 'border-emerald-500/20');
+				statusDiv.innerHTML = 'Thank you! Your message has been sent successfully. We will get back to you shortly.';
+				
+				// Reset form
+				form.reset();
+			} else {
+				statusDiv.classList.remove('hidden', 'text-emerald-500', 'bg-emerald-500/5', 'border-emerald-500/20');
+				statusDiv.classList.add('block', 'text-brand-danger', 'bg-brand-danger/5', 'border-brand-danger/20');
+				statusDiv.innerHTML = 'Please fill out all fields.';
+			}
+		});
+	</script>
+</Layout>

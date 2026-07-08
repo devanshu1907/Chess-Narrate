@@ -1,0 +1,61 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+
+<Layout 
+	title="About Us | Chess Analysis & AI Narrator" 
+	description="Learn about the ChessNarrate project, our mission to bridge the engine explanation gap, and how Stockfish and AI commentary work together."
+>
+	<section class="max-w-3xl mx-auto flex flex-col gap-8 py-4 font-sans select-none">
+		<div class="flex flex-col gap-3">
+			<a href="/" class="text-xs font-mono text-brand-accent hover:underline flex items-center gap-1.5 w-fit">
+				&larr; Back to Analysis Board
+			</a>
+			<h1 class="text-3xl sm:text-4xl font-semibold tracking-tight text-brand-ink mt-2">
+				About ChessNarrate
+			</h1>
+			<p class="text-brand-body text-sm sm:text-base leading-relaxed">
+				ChessNarrate was created to solve a fundamental issue in modern chess learning: the <strong>Explanation Gap</strong>.
+			</p>
+		</div>
+
+		<hr class="border-brand-hairline" />
+
+		<div class="flex flex-col gap-6 text-sm sm:text-base text-brand-body leading-relaxed">
+			<div>
+				<h2 class="text-lg font-semibold text-brand-ink uppercase font-mono tracking-wide mb-2">
+					The Explanation Gap
+				</h2>
+				<p>
+					Modern chess analysis engines like Stockfish are incredibly powerful. They can compute millions of positions per second and output a precise numerical score, telling you exactly who is winning and by how much. However, they lack the ability to explain <em>why</em>. A score drop of -1.50 doesn't tell a beginner why their knight move was a mistake, or what positional trap they just walked into. 
+				</p>
+				<p class="mt-3">
+					ChessNarrate bridges this gap by translating cold evaluation numbers into witty, strategic narratives in real time. We take the chess engine's mathematical data and convert it into natural language critiques, explaining concepts like pawn structure, king safety, center control, and piece activity in simple terms.
+				</p>
+			</div>
+
+			<div>
+				<h2 class="text-lg font-semibold text-brand-ink uppercase font-mono tracking-wide mb-2">
+					Our Core Technologies
+				</h2>
+				<p>
+					We leverage state-of-the-art client-side and cloud technologies to bring you a premium analysis experience:
+				</p>
+				<ul class="list-dash list-inside flex flex-col gap-2 pl-2 mt-3 text-brand-body text-xs sm:text-sm font-mono">
+					<li><strong>In-Browser Stockfish</strong>: Runs a multi-threaded Stockfish instance directly in your browser using Web Workers. Your device does the calculations locally—no server lags.</li>
+					<li><strong>Rule-Based Critique Engine</strong>: Formulates instant local witty comments for offline use, categorizing moves into blunders, mistakes, and brilliant finds.</li>
+					<li><strong>Gemini AI Integration</strong>: Optionally utilizes Google's Gemini API (via your own local API key stored securely in your browser) to stream custom voice personalities and deep positional assessments.</li>
+				</ul>
+			</div>
+
+			<div>
+				<h2 class="text-lg font-semibold text-brand-ink uppercase font-mono tracking-wide mb-2">
+					Our Vision
+				</h2>
+				<p>
+					Our mission is to make chess analysis accessible, educational, and above all, entertaining. We believe that learning shouldn't feel like studying a spreadsheet of move lists. By injecting humor, sarcasm, or encouraging mentorship into the narrator's commentary, we make stepping through your blunders an engaging, memorable process that helps you retain strategic lessons.
+				</p>
+			</div>
+		</div>
+	</section>
+</Layout>

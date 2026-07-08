@@ -1,0 +1,71 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+
+<Layout 
+	title="Privacy Policy | Chess Data Protection" 
+	description="Understand our privacy policy. ChessNarrate operates client-side and does not upload your chess games or FEN strings to remote servers."
+>
+	<section class="max-w-3xl mx-auto flex flex-col gap-8 py-4 font-sans select-none">
+		<div class="flex flex-col gap-3">
+			<a href="/" class="text-xs font-mono text-brand-accent hover:underline flex items-center gap-1.5 w-fit">
+				&larr; Back to Analysis Board
+			</a>
+			<h1 class="text-3xl sm:text-4xl font-semibold tracking-tight text-brand-ink mt-2">
+				Privacy Policy
+			</h1>
+			<p class="text-brand-body text-sm sm:text-base leading-relaxed">
+				Last updated: July 8, 2026. Your privacy is our absolute priority.
+			</p>
+		</div>
+
+		<hr class="border-brand-hairline" />
+
+		<div class="flex flex-col gap-6 text-sm sm:text-base text-brand-body leading-relaxed">
+			<div>
+				<h2 class="text-lg font-semibold text-brand-ink uppercase font-mono tracking-wide mb-2">
+					1. Local-First Processing (No Data Collection)
+				</h2>
+				<p>
+					All core chess engine calculations (powered by Stockfish) are performed <strong>locally in your browser</strong> using client-side Web Workers. Your FEN strings, PGN games, and board move lists are processed on your local device's memory. We do not store, collect, or upload your chess data to any external database or remote server.
+				</p>
+			</div>
+
+			<div>
+				<h2 class="text-lg font-semibold text-brand-ink uppercase font-mono tracking-wide mb-2">
+					2. Local Storage Usage
+				</h2>
+				<p>
+					We use the browser's <code>localStorage</code> feature for your convenience to save configurations locally (such as your theme preferences, voice auto-speak settings, and optional Gemini API keys). This data stays entirely on your computer and is never sent back to us.
+				</p>
+			</div>
+
+			<div>
+				<h2 class="text-lg font-semibold text-brand-ink uppercase font-mono tracking-wide mb-2">
+					3. Optional Gemini AI API Calls
+				</h2>
+				<p>
+					If you enable the Gemini AI integration by providing your own API key, ChessNarrate will send positional evaluations (FENS, move scores) to Google's Gemini API endpoints to generate custom strategic comments. This communication is direct between your browser and Google's API server. Google's own privacy rules govern how they handle API requests.
+				</p>
+			</div>
+
+			<div>
+				<h2 class="text-lg font-semibold text-brand-ink uppercase font-mono tracking-wide mb-2">
+					4. No Cookies or Tracking
+				</h2>
+				<p>
+					ChessNarrate does not use tracking cookies, analytics scripts, or advertisement networks. We do not track your browsing history or compile user profiles.
+				</p>
+			</div>
+
+			<div>
+				<h2 class="text-lg font-semibold text-brand-ink uppercase font-mono tracking-wide mb-2">
+					5. Contact Us
+				</h2>
+				<p>
+					If you have any questions about this Privacy Policy or how your local browser data is handled, feel free to visit our <a href="/contact" class="text-brand-accent hover:underline">Contact page</a> to send us a message.
+				</p>
+			</div>
+		</div>
+	</section>
+</Layout>

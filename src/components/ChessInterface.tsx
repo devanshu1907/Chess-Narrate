@@ -127,13 +127,13 @@ export default function ChessInterface() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   // Refs
-  const autoplayTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const autoplayTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const workerRef = useRef<Worker | null>(null);
   const aiWorkerRef = useRef<Worker | null>(null);
   const evaluatingFenRef = useRef<string | null>(null);
   const tempScoreRef = useRef<number>(0);
   const tempIsMateRef = useRef<boolean>(false);
-  const evalTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const evalTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastNarratedFenRef = useRef<string | null>(null);
   const lastSettingsRef = useRef({ personality: '', useGemini: false });
   const handleAiBestMoveRef = useRef<(bestMove: string) => void>(() => {});
@@ -604,8 +604,9 @@ export default function ChessInterface() {
     }
 
     const move = moves[currentMoveIndex];
+    if (!move) return;
     const fen_curr = move.fen;
-    const fen_prev = currentMoveIndex === 0 ? loadedFenStart : moves[currentMoveIndex - 1].fen;
+    const fen_prev = currentMoveIndex === 0 ? loadedFenStart : (moves[currentMoveIndex - 1]?.fen || loadedFenStart);
     
     prioritizeEvaluation(fen_curr);
     prioritizeEvaluation(fen_prev);
@@ -928,6 +929,8 @@ export default function ChessInterface() {
     
     const bestMove = bestMovesCache[fen_prev];
     const isBestMove = bestMove === (move.from + move.to);
+    const isCapture = move.san.includes('x');
+    const isCheck = move.san.includes('+') || move.san.includes('#');
     
     let quality: 'only_move' | 'brilliant' | 'blunder' | 'mistake' | 'dubious' | 'interesting' | 'unclear' | 'excellent' | 'best' | 'good' = 'good';
     let label = 'Good Move';
@@ -1296,7 +1299,7 @@ export default function ChessInterface() {
 
   // Calculate height and stats for the vertical evaluation bar
   const getEvaluationBarStats = () => {
-    const activeFen = currentMoveIndex === -1 ? loadedFenStart : moves[currentMoveIndex].fen;
+    const activeFen = currentMoveIndex === -1 ? loadedFenStart : (moves[currentMoveIndex]?.fen || loadedFenStart);
     const scoreVal = evalCache[activeFen];
     
     if (scoreVal === undefined) {
@@ -1333,7 +1336,7 @@ export default function ChessInterface() {
 
   // Define CustomSquareRenderer to render evaluation badges/icons directly on the board
   const CustomSquareRenderer = React.useCallback(({ piece, square, children }: any) => {
-    const currentMove = currentMoveIndex !== -1 ? moves[currentMoveIndex] : null;
+    const currentMove = (currentMoveIndex !== -1 && moves[currentMoveIndex]) ? moves[currentMoveIndex] : null;
     const isDestination = currentMove && currentMove.to === square;
     
     let badge = null;
@@ -1373,6 +1376,108 @@ export default function ChessInterface() {
   const { percent: pgnEvalPercent, evaluated: pgnEvalEvaluated, total: pgnEvalTotal } = getEvaluationProgress();
 
   const { percent: evalPercent, displayEval } = getEvaluationBarStats();
+
+  // Helper to render the Narrator Box in a responsive layout
+  const renderNarratorBox = (displayClass: string) => {
+    return (
+      <div className={`bg-brand-canvas border border-brand-hairline rounded-md p-5 sm:p-6 shadow-lvl3 relative overflow-hidden flex flex-col gap-4 w-full ${displayClass}`}>
+        {/* Header */}
+        <div className="flex justify-between items-center border-b border-brand-hairline pb-3 select-none">
+          <div className="flex items-center gap-2">
+            <div className="relative flex h-2 w-2">
+              <span className={`absolute inline-flex h-full w-full rounded-full opacity-75 ${isPlayingAudio ? 'animate-ping bg-emerald-400' : 'bg-brand-accent'}`}></span>
+              <span className={`relative inline-flex rounded-full h-2 w-2 ${isPlayingAudio ? 'bg-emerald-500' : 'bg-brand-accent'}`}></span>
+            </div>
+            <h2 className="text-xs font-mono tracking-wider uppercase text-brand-ink font-bold">
+              Narrator Panel
+            </h2>
+          </div>
+          
+          {/* Audio narration toggle */}
+          <div className="flex items-center gap-2">
+            <label className="text-[11px] font-mono text-brand-body cursor-pointer flex items-center gap-1 select-none">
+              <input 
+                type="checkbox" 
+                checked={autoSpeak} 
+                onChange={(e) => setAutoSpeak(e.target.checked)} 
+                className="rounded-xs border-brand-hairline accent-brand-primary w-3.5 h-3.5"
+              />
+              Auto-Speak
+            </label>
+
+            <button
+              onClick={() => {
+                if (isPlayingAudio) {
+                  window.speechSynthesis.cancel();
+                  setIsPlayingAudio(false);
+                } else {
+                  speakText(narratorText);
+                }
+              }}
+              className={`p-1.5 rounded-sm border transition-colors focus-visible:ring-1 focus-visible:ring-brand-accent ${
+                isPlayingAudio 
+                  ? 'border-emerald-500/30 text-emerald-500 bg-emerald-500/10' 
+                  : 'border-brand-hairline text-brand-ink hover:bg-brand-canvas-soft2'
+              }`}
+              title="Speak Narration"
+              aria-label="Toggle narration speech"
+            >
+              {isPlayingAudio ? (
+                <svg aria-hidden="true" className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"></path>
+                </svg>
+              ) : (
+                <svg aria-hidden="true" className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
+                </svg>
+              )}
+            </button>
+          </div>
+        </div>
+
+        {/* Narration critique display */}
+        <div className="min-h-[90px] flex items-start gap-3">
+          {/* Avatar icon */}
+          <div className="w-10 h-10 rounded-sm bg-brand-primary border border-brand-hairline flex items-center justify-center shrink-0 text-brand-on-primary shadow-inner select-none font-bold uppercase">
+            {narratorPersonality.charAt(0)}
+          </div>
+
+          {/* Typewritten comment text */}
+          <div className="flex-grow">
+            <p className="text-sm text-brand-ink leading-relaxed font-sans min-h-[40px]">
+              {displayedNarration}
+              <span className="inline-block w-1.5 h-3 bg-brand-accent ml-0.5 animate-pulse" />
+            </p>
+            
+            {/* Dynamic move rating sub-label */}
+            {currentMoveIndex !== -1 && getMoveQualityInfo(currentMoveIndex) && (
+              <div className="mt-2 text-xs font-mono flex items-center gap-1.5 select-none">
+                <span className={getMoveQualityInfo(currentMoveIndex)!.colorClass}>
+                  {getMoveQualityInfo(currentMoveIndex)!.label}
+                </span>
+                <span className="text-brand-body">
+                  (Eval change: {getMoveQualityInfo(currentMoveIndex)!.change > 0 ? '+' : ''}
+                  {getMoveQualityInfo(currentMoveIndex)!.change.toFixed(2)})
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Soundwave animation when playing audio */}
+        {isPlayingAudio && (
+          <div className="flex justify-center items-end gap-[3px] h-6 bg-emerald-500/10 border border-emerald-500/20 rounded-sm p-1">
+            <span className="w-[3px] h-3 bg-emerald-500 rounded-pill animate-bounce" style={{ animationDelay: '0.1s' }} />
+            <span className="w-[3px] h-5 bg-emerald-400 rounded-pill animate-bounce" style={{ animationDelay: '0.2s' }} />
+            <span className="w-[3px] h-2 bg-emerald-500 rounded-pill animate-bounce" style={{ animationDelay: '0.3s' }} />
+            <span className="w-[3px] h-4 bg-emerald-400 rounded-pill animate-bounce" style={{ animationDelay: '0.4s' }} />
+            <span className="w-[3px] h-1 bg-emerald-500 rounded-pill animate-bounce" style={{ animationDelay: '0.5s' }} />
+          </div>
+        )}
+      </div>
+    );
+  };
 
   return (
     <div className="w-full flex flex-col gap-6">
@@ -1435,7 +1540,7 @@ export default function ChessInterface() {
         <div className="lg:col-span-7 flex flex-col items-center w-full min-w-0">
           
           {/* Chessboard & Eval Bar Container */}
-          <div className="flex gap-4 items-stretch w-full max-w-[500px] h-[340px] sm:h-[460px] md:h-[480px]">
+          <div className="flex gap-2 sm:gap-4 items-stretch w-full max-w-[500px] h-auto">
             
             {/* Vertical Evaluation Bar */}
             <div className="w-5 md:w-6 shrink-0 flex flex-col justify-between py-2 relative rounded-md bg-brand-primary border border-brand-hairline overflow-hidden select-none shadow-lvl1">
@@ -1459,7 +1564,7 @@ export default function ChessInterface() {
             >
               <div className="w-full aspect-square max-h-[460px]">
                 <Chessboard 
-                  key={loadedFenStart + boardOrientation + currentMoveIndex}
+                  key={loadedFenStart + boardOrientation}
                   options={{
                     position: positionFen,
                     onPieceDrop: ({ sourceSquare, targetSquare }) => targetSquare ? onDrop(sourceSquare, targetSquare) : false,
@@ -1468,7 +1573,7 @@ export default function ChessInterface() {
                     squareStyles: getCustomSquareStyles(),
                     darkSquareStyle: { backgroundColor: 'var(--color-board-dark)' },
                     lightSquareStyle: { backgroundColor: 'var(--color-board-light)' },
-                    arePiecesDraggable: gameMode === 'play' ? (gameStatus === 'active' && !isAiThinking && isPlayersTurn) : true
+                    allowDragging: gameMode === 'play' ? (gameStatus === 'active' && !isAiThinking && isPlayersTurn) : true
                   }}
                 />
               </div>
@@ -1509,11 +1614,11 @@ export default function ChessInterface() {
 
  
         {/* Move Step Controls */}
-        <div className="flex items-center gap-2 mt-4 w-full max-w-[500px] bg-brand-canvas border border-brand-hairline rounded-md p-2 justify-center shadow-lvl2">
+        <div className="flex items-center gap-1 sm:gap-2 mt-4 w-full max-w-[500px] bg-brand-canvas border border-brand-hairline rounded-md p-1.5 sm:p-2 justify-center shadow-lvl2">
           <button
             onClick={() => jumpToMove(-1)}
             disabled={currentMoveIndex === -1}
-            className="p-2 rounded-sm text-brand-ink hover:bg-brand-canvas-soft2 border border-transparent hover:border-brand-hairline disabled:opacity-30 disabled:hover:bg-transparent transition-all focus-visible:ring-2 focus-visible:ring-brand-accent focus-visible:outline-hidden"
+            className="p-1.5 sm:p-2 rounded-sm text-brand-ink hover:bg-brand-canvas-soft2 border border-transparent hover:border-brand-hairline disabled:opacity-30 disabled:hover:bg-transparent transition-all focus-visible:ring-2 focus-visible:ring-brand-accent focus-visible:outline-hidden"
             aria-label="Go to starting position"
           >
             <svg aria-hidden="true" className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -1524,7 +1629,7 @@ export default function ChessInterface() {
           <button
             onClick={() => jumpToMove(currentMoveIndex - 1)}
             disabled={currentMoveIndex === -1}
-            className="p-2 rounded-sm text-brand-ink hover:bg-brand-canvas-soft2 border border-transparent hover:border-brand-hairline disabled:opacity-30 disabled:hover:bg-transparent transition-all focus-visible:ring-2 focus-visible:ring-brand-accent focus-visible:outline-hidden"
+            className="p-1.5 sm:p-2 rounded-sm text-brand-ink hover:bg-brand-canvas-soft2 border border-transparent hover:border-brand-hairline disabled:opacity-30 disabled:hover:bg-transparent transition-all focus-visible:ring-2 focus-visible:ring-brand-accent focus-visible:outline-hidden"
             aria-label="Go to previous move"
           >
             <svg aria-hidden="true" className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -1536,7 +1641,7 @@ export default function ChessInterface() {
           {moves.length > 0 && (
             <button
               onClick={() => setIsPlaying(!isPlaying)}
-              className="px-4 py-1.5 rounded-pill text-xs font-semibold bg-brand-primary text-brand-on-primary hover:opacity-90 transition-opacity focus-visible:ring-2 focus-visible:ring-brand-accent/50 focus-visible:outline-hidden flex items-center gap-1.5"
+              className="px-2.5 sm:px-4 py-1.5 rounded-pill text-xs font-semibold bg-brand-primary text-brand-on-primary hover:opacity-90 transition-opacity focus-visible:ring-2 focus-visible:ring-brand-accent/50 focus-visible:outline-hidden flex items-center gap-1.5"
               aria-label={isPlaying ? "Pause autoplay" : "Play autoplay"}
             >
               {isPlaying ? (
@@ -1545,14 +1650,14 @@ export default function ChessInterface() {
                     <rect x="4" y="4" width="6" height="16" rx="1"></rect>
                     <rect x="14" y="4" width="6" height="16" rx="1"></rect>
                   </svg>
-                  Pause
+                  <span className="hidden sm:inline">Pause</span>
                 </>
               ) : (
                 <>
                   <svg aria-hidden="true" className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                     <path d="M8 5v14l11-7z"></path>
                   </svg>
-                  Autoplay
+                  <span className="hidden sm:inline">Autoplay</span>
                 </>
               )}
             </button>
@@ -1618,6 +1723,9 @@ export default function ChessInterface() {
           )}
         </div>
 
+        {/* AI Narrator Box for Mobile Viewports */}
+        {renderNarratorBox('flex lg:hidden mt-4')}
+ 
         {/* Evaluation Line Chart */}
         {renderEvalChart()}
       </div>
@@ -1625,103 +1733,8 @@ export default function ChessInterface() {
       {/* RIGHT COLUMN: AI Narrator, Inputs & Move history */}
       <div className="lg:col-span-5 flex flex-col gap-6 w-full min-w-0">
         
-        {/* AI NARRATOR BOX */}
-        <div className="bg-brand-canvas border border-brand-hairline rounded-md p-6 shadow-lvl3 relative overflow-hidden flex flex-col gap-4">
-          {/* Header */}
-          <div className="flex justify-between items-center border-b border-brand-hairline pb-3 select-none">
-            <div className="flex items-center gap-2">
-              <div className="relative flex h-2 w-2">
-                <span className={`absolute inline-flex h-full w-full rounded-full opacity-75 ${isPlayingAudio ? 'animate-ping bg-emerald-400' : 'bg-brand-accent'}`}></span>
-                <span className={`relative inline-flex rounded-full h-2 w-2 ${isPlayingAudio ? 'bg-emerald-500' : 'bg-brand-accent'}`}></span>
-              </div>
-              <h2 className="text-xs font-mono tracking-wider uppercase text-brand-ink font-bold">
-                Narrator Panel
-              </h2>
-            </div>
-            
-            {/* Audio narration toggle */}
-            <div className="flex items-center gap-2">
-              <label className="text-[11px] font-mono text-brand-body cursor-pointer flex items-center gap-1 select-none">
-                <input 
-                  type="checkbox" 
-                  checked={autoSpeak} 
-                  onChange={(e) => setAutoSpeak(e.target.checked)} 
-                  className="rounded-xs border-brand-hairline accent-brand-primary w-3.5 h-3.5"
-                />
-                Auto-Speak
-              </label>
- 
-              <button
-                onClick={() => {
-                  if (isPlayingAudio) {
-                    window.speechSynthesis.cancel();
-                    setIsPlayingAudio(false);
-                  } else {
-                    speakText(narratorText);
-                  }
-                }}
-                className={`p-1.5 rounded-sm border transition-colors focus-visible:ring-1 focus-visible:ring-brand-accent ${
-                  isPlayingAudio 
-                    ? 'border-emerald-500/30 text-emerald-500 bg-emerald-500/10' 
-                    : 'border-brand-hairline text-brand-ink hover:bg-brand-canvas-soft2'
-                }`}
-                title="Speak Narration"
-                aria-label="Toggle narration speech"
-              >
-                {isPlayingAudio ? (
-                  <svg aria-hidden="true" className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"></path>
-                  </svg>
-                ) : (
-                  <svg aria-hidden="true" className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
-                  </svg>
-                )}
-              </button>
-            </div>
-          </div>
- 
-          {/* Narration critique display */}
-          <div className="min-h-[90px] flex items-start gap-3">
-            {/* Avatar icon */}
-            <div className="w-10 h-10 rounded-sm bg-brand-primary border border-brand-hairline flex items-center justify-center shrink-0 text-brand-on-primary shadow-inner select-none font-bold uppercase">
-              {narratorPersonality.charAt(0)}
-            </div>
- 
-            {/* Typewritten comment text */}
-            <div className="flex-grow">
-              <p className="text-sm text-brand-ink leading-relaxed font-sans min-h-[40px]">
-                {displayedNarration}
-                <span className="inline-block w-1.5 h-3 bg-brand-accent ml-0.5 animate-pulse" />
-              </p>
-              
-              {/* Dynamic move rating sub-label */}
-              {currentMoveIndex !== -1 && getMoveQualityInfo(currentMoveIndex) && (
-                <div className="mt-2 text-xs font-mono flex items-center gap-1.5 select-none">
-                  <span className={getMoveQualityInfo(currentMoveIndex)!.colorClass}>
-                    {getMoveQualityInfo(currentMoveIndex)!.label}
-                  </span>
-                  <span className="text-brand-body">
-                    (Eval change: {getMoveQualityInfo(currentMoveIndex)!.change > 0 ? '+' : ''}
-                    {getMoveQualityInfo(currentMoveIndex)!.change.toFixed(2)})
-                  </span>
-                </div>
-              )}
-            </div>
-          </div>
- 
-          {/* Soundwave animation when playing audio */}
-          {isPlayingAudio && (
-            <div className="flex justify-center items-end gap-[3px] h-6 bg-emerald-500/10 border border-emerald-500/20 rounded-sm p-1">
-              <span className="w-[3px] h-3 bg-emerald-500 rounded-pill animate-bounce" style={{ animationDelay: '0.1s' }} />
-              <span className="w-[3px] h-5 bg-emerald-400 rounded-pill animate-bounce" style={{ animationDelay: '0.2s' }} />
-              <span className="w-[3px] h-2 bg-emerald-500 rounded-pill animate-bounce" style={{ animationDelay: '0.3s' }} />
-              <span className="w-[3px] h-4 bg-emerald-400 rounded-pill animate-bounce" style={{ animationDelay: '0.4s' }} />
-              <span className="w-[3px] h-1 bg-emerald-500 rounded-pill animate-bounce" style={{ animationDelay: '0.5s' }} />
-            </div>
-          )}
-        </div>
+        {/* AI NARRATOR BOX (Desktop) */}
+        {renderNarratorBox('hidden lg:flex')}
  
         {/* INPUT POSITION / PGN CARD */}
         <div className="bg-brand-canvas border border-brand-hairline rounded-md p-6 shadow-lvl2 relative">
@@ -2002,7 +2015,7 @@ function getWittyCritique(
   move: MoveItem, 
   quality: 'only_move' | 'brilliant' | 'blunder' | 'mistake' | 'dubious' | 'interesting' | 'unclear' | 'excellent' | 'best' | 'good', 
   change: number,
-  personality: string
+  personality: 'sarcastic' | 'supportive' | 'grandmaster' | 'pirate'
 ) {
   if (move.san.includes('#')) {
     const checkmateComments = {
@@ -2264,7 +2277,7 @@ async function generateGeminiCommentary(
   quality: string,
   change: number,
   bestMove: string,
-  personality: string,
+  personality: 'sarcastic' | 'supportive' | 'grandmaster' | 'pirate',
   apiKey: string,
   isCheckmate = false,
   isDraw = false

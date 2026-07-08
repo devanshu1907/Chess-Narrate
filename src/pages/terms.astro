@@ -1,0 +1,80 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+
+<Layout 
+	title="Terms & Conditions | Chess Analysis Services" 
+	description="Read the terms of service, acceptable use policies, and legal disclaimers for ChessNarrate."
+>
+	<section class="max-w-3xl mx-auto flex flex-col gap-8 py-4 font-sans select-none">
+		<div class="flex flex-col gap-3">
+			<a href="/" class="text-xs font-mono text-brand-accent hover:underline flex items-center gap-1.5 w-fit">
+				&larr; Back to Analysis Board
+			</a>
+			<h1 class="text-3xl sm:text-4xl font-semibold tracking-tight text-brand-ink mt-2">
+				Terms & Conditions
+			</h1>
+			<p class="text-brand-body text-sm sm:text-base leading-relaxed">
+				Last updated: July 8, 2026. Please read these Terms & Conditions carefully before using our services.
+			</p>
+		</div>
+
+		<hr class="border-brand-hairline" />
+
+		<div class="flex flex-col gap-6 text-sm sm:text-base text-brand-body leading-relaxed">
+			<div>
+				<h2 class="text-lg font-semibold text-brand-ink uppercase font-mono tracking-wide mb-2">
+					1. Agreement to Terms
+				</h2>
+				<p>
+					By accessing or using ChessNarrate, you agree to be bound by these Terms & Conditions. If you do not agree with any part of these terms, you are prohibited from using the platform.
+				</p>
+			</div>
+
+			<div>
+				<h2 class="text-lg font-semibold text-brand-ink uppercase font-mono tracking-wide mb-2">
+					2. Intellectual Property
+				</h2>
+				<p>
+					The ChessNarrate application code and user interface layout are proprietary. However, the background chess engine operates using Stockfish, which is licensed under the GPL-3.0 open-source license. All third-party assets, such as stockfish.js worker libraries, are the property of their respective creators and are used under permissive licenses.
+				</p>
+			</div>
+
+			<div>
+				<h2 class="text-lg font-semibold text-brand-ink uppercase font-mono tracking-wide mb-2">
+					3. Acceptable Use
+				</h2>
+				<p>
+					You agree to use ChessNarrate for educational and recreational game analysis purposes only. You must not attempt to disrupt the performance of the local web worker engines, inject malicious code, or run denial-of-service scripts against the static page hosting servers.
+				</p>
+			</div>
+
+			<div>
+				<h2 class="text-lg font-semibold text-brand-ink uppercase font-mono tracking-wide mb-2">
+					4. Disclaimer of Warranties
+				</h2>
+				<p>
+					ChessNarrate is provided on an "as-is" and "as-available" basis. We make no warranties, expressed or implied, regarding the mathematical accuracy of the Stockfish engine, the reliability of AI-generated commentaries, or the availability of the web service.
+				</p>
+			</div>
+
+			<div>
+				<h2 class="text-lg font-semibold text-brand-ink uppercase font-mono tracking-wide mb-2">
+					5. Limitation of Liability
+				</h2>
+				<p>
+					Under no circumstances shall ChessNarrate or its developers be liable for any direct, indirect, incidental, or consequential damages resulting from your use or inability to use the platform.
+				</p>
+			</div>
+
+			<div>
+				<h2 class="text-lg font-semibold text-brand-ink uppercase font-mono tracking-wide mb-2">
+					6. Changes to Terms
+				</h2>
+				<p>
+					We reserve the right to modify these Terms & Conditions at any time. Changes will be posted directly on this page, and your continued usage of the application indicates your acceptance of the updated terms.
+				</p>
+			</div>
+		</div>
+	</section>
+</Layout>
