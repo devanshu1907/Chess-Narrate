@@ -7,8 +7,8 @@ interface Props {
 }
 
 const { 
-	title = "Chess Analysis & AI Narrator — Free Online Chess Engine Board", 
-	description = "Analyze chess games with our free online chess analysis board. Run local Stockfish engine analysis, upload PGNs, play chess against computer, and get AI narratives." 
+	title = "Chess Analysis & ChessNarrate — Free Online Chess Engine Board", 
+	description = "Analyze chess games with our free online chess analysis board. Run local Stockfish engine analysis, upload PGNs, play chess against computer, and get ChessNarrate narratives." 
 } = Astro.props;
 ---
 
@@ -21,7 +21,7 @@ const {
 		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
 		<link rel="shortcut icon" href="/favicon.ico" />
 		<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
-		<meta name="apple-mobile-web-app-title" content="Chessate" />
+		<meta name="apple-mobile-web-app-title" content="ChessNarrate" />
 		<link rel="manifest" href="/site.webmanifest" />
 		<meta name="generator" content={Astro.generator} />
 		
@@ -84,11 +84,9 @@ const {
 		<header class="h-16 border-b border-brand-hairline bg-brand-canvas/75 backdrop-blur-md sticky top-0 z-40 flex items-center px-4 md:px-8 shadow-lvl1">
 			<div class="max-w-7xl w-full mx-auto flex justify-between items-center relative z-10">
 				<a href="/" class="flex items-center gap-2 hover:opacity-90 transition-opacity">
-					<svg aria-hidden="true" class="w-6 h-6 text-brand-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"></path>
-					</svg>
+					<img src="/favicon.svg" alt="ChessNarrate Logo" class="w-6 h-6 object-contain" />
 					<span class="font-sans font-semibold tracking-tight text-lg text-brand-ink">
-						Chess Narrator<span class="text-brand-accent">.</span>
+						ChessNarrate<span class="text-brand-accent">.</span>
 					</span>
 				</a>
 				<nav class="flex items-center gap-3 sm:gap-4">
@@ -127,7 +125,7 @@ const {
 		<footer class="border-t border-brand-hairline bg-brand-canvas/30 backdrop-blur-xs py-6 text-xs text-brand-body font-mono relative z-10">
 			<div class="max-w-7xl mx-auto px-4 md:px-8 flex flex-col md:flex-row justify-between items-center gap-4">
 				<div class="flex flex-col sm:flex-row items-center gap-2 sm:gap-4 text-center md:text-left">
-					<p>AI Chess Narrator. Powered by client-side Stockfish WASM.</p>
+					<p>ChessNarrate. Powered by client-side Stockfish WASM.</p>
 					<p class="hidden sm:inline text-brand-hairline-strong">|</p>
 					<p>&copy; {new Date().getFullYear()} Devanshu Yadav. All rights reserved.</p>
 				</div>
