@@ -1437,7 +1437,7 @@ export default function ChessInterface() {
         </div>
 
         {/* Narration critique display */}
-        <div className="min-h-[90px] flex items-start gap-3">
+        <div className="min-h-[120px] sm:min-h-[96px] flex items-start gap-3">
           {/* Avatar icon */}
           <div className="w-10 h-10 rounded-sm bg-brand-primary border border-brand-hairline flex items-center justify-center shrink-0 text-brand-on-primary shadow-inner select-none font-bold uppercase">
             {narratorPersonality.charAt(0)}
@@ -1445,7 +1445,7 @@ export default function ChessInterface() {
 
           {/* Typewritten comment text */}
           <div className="flex-grow">
-            <p className="text-sm text-brand-ink leading-relaxed font-sans min-h-[40px]">
+            <p className="text-sm text-brand-ink leading-relaxed font-sans min-h-[80px] sm:min-h-[56px]">
               {displayedNarration}
               <span className="inline-block w-1.5 h-3 bg-brand-accent ml-0.5 animate-pulse" />
             </p>
