@@ -22,3 +22,9 @@ pnpm-debug.log*
 
 # jetbrains setting folder
 .idea/
+
+# AI agent configuration & metadata files
+.agents/
+AGENTS.md
+skills-lock.json
+.gemini/
