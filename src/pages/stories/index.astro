@@ -1,0 +1,139 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import { STORIES } from '../../data/stories';
+---
+
+<Layout 
+	title="Famous Chess Stories — Interactive Learning | ChessNarrate" 
+	description="Experience legendary chess games as interactive stories. Step through the Immortal Game, the Opera Game, the Game of the Century, and more with AI narrator commentary and guess-the-move challenges."
+>
+	<section class="max-w-5xl mx-auto flex flex-col gap-8 py-4 font-sans select-none">
+		<div class="flex flex-col gap-3">
+			<a href="/" class="text-xs font-mono text-brand-accent hover:underline flex items-center gap-1.5 w-fit">
+				&larr; Back to Analysis Board
+			</a>
+			<h1 class="text-3xl sm:text-4xl font-semibold tracking-tight text-brand-ink mt-2">
+				Famous Games<span class="text-brand-accent">.</span>
+			</h1>
+			<p class="text-brand-body text-sm sm:text-base leading-relaxed max-w-2xl">
+				Experience legendary chess games as interactive stories. Step through each move with narrator commentary, 
+				and test your skills with guess-the-move challenges at key turning points.
+			</p>
+		</div>
+
+		<hr class="border-brand-hairline" />
+
+		<!-- Stories Grid -->
+		<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+			{STORIES.map((story) => (
+				<a 
+					href={`/stories/${story.slug}`} 
+					id={`story-card-${story.slug}`}
+					class="group relative flex flex-col gap-3 p-5 rounded-md border border-brand-hairline bg-brand-canvas hover:bg-brand-canvas-soft2 hover:border-brand-accent/30 transition-all duration-200 shadow-lvl1 hover:shadow-lvl3 cursor-pointer"
+				>
+					<!-- Badge icon -->
+					<div class="flex items-center justify-between">
+						<span class="text-3xl" id={`badge-icon-${story.slug}`}>
+							{story.badge.icon}
+						</span>
+						<span class="text-[10px] font-mono text-brand-mute border border-brand-hairline rounded-full px-2 py-0.5">
+							{story.year}
+						</span>
+					</div>
+
+					<!-- Title -->
+					<h2 class="text-lg font-semibold tracking-tight text-brand-ink group-hover:text-brand-accent transition-colors">
+						{story.title}
+					</h2>
+
+					<!-- Subtitle -->
+					<p class="text-xs font-mono text-brand-mute -mt-1.5">
+						{story.subtitle}
+					</p>
+
+					<!-- Description -->
+					<p class="text-xs text-brand-body leading-relaxed line-clamp-3 flex-grow">
+						{story.description}
+					</p>
+
+					<!-- Badge status -->
+					<div class="flex items-center justify-between mt-auto pt-2 border-t border-brand-hairline">
+						<span 
+							class="text-[10px] font-mono text-brand-mute opacity-50" 
+							id={`badge-status-${story.slug}`}
+						>
+							{story.badge.name}
+						</span>
+						<span class="text-xs font-semibold text-brand-accent group-hover:translate-x-0.5 transition-transform">
+							Play &rarr;
+						</span>
+					</div>
+				</a>
+			))}
+		</div>
+
+		<!-- Badge Legend -->
+		<div class="bg-brand-canvas border border-brand-hairline rounded-md p-5 shadow-lvl1 mt-2">
+			<h3 class="text-xs font-mono font-bold uppercase tracking-wider text-brand-ink mb-3">
+				Badges Collection
+			</h3>
+			<div class="flex flex-wrap gap-3">
+				{STORIES.map((story) => (
+					<div 
+						class="flex items-center gap-2 bg-brand-canvas-soft2 border border-brand-hairline rounded-sm px-3 py-1.5 opacity-50"
+						id={`badge-legend-${story.slug}`}
+					>
+						<span class="text-sm">{story.badge.icon}</span>
+						<span class="text-[10px] font-mono text-brand-body">{story.badge.name}</span>
+					</div>
+				))}
+			</div>
+			<p class="text-[10px] font-mono text-brand-mute mt-3" id="badge-progress-text">
+				Complete stories to earn badges. Your progress is saved locally.
+			</p>
+		</div>
+	</section>
+
+	<!-- Client-side badge checking script -->
+	<script>
+		function checkBadges() {
+			try {
+				const raw = localStorage.getItem('chess_narrator_story_badges');
+				if (!raw) return;
+				const badges = JSON.parse(raw);
+				let earned = 0;
+				const total = document.querySelectorAll('[id^="badge-legend-"]').length;
+
+				for (const [slug, data] of Object.entries(badges)) {
+					if ((data as any).completed) {
+						earned++;
+						// Light up the badge on the card
+						const statusEl = document.getElementById(`badge-status-${slug}`);
+						if (statusEl) {
+							statusEl.classList.remove('opacity-50');
+							statusEl.classList.add('text-brand-accent', 'font-semibold');
+							statusEl.textContent = `✓ ${statusEl.textContent?.trim()}`;
+						}
+
+						// Light up the badge in the legend
+						const legendEl = document.getElementById(`badge-legend-${slug}`);
+						if (legendEl) {
+							legendEl.classList.remove('opacity-50');
+							legendEl.classList.add('ring-1', 'ring-brand-accent/30');
+						}
+					}
+				}
+
+				const progressEl = document.getElementById('badge-progress-text');
+				if (progressEl) {
+					progressEl.textContent = earned > 0 
+						? `${earned}/${total} badges earned. Keep going!` 
+						: 'Complete stories to earn badges. Your progress is saved locally.';
+				}
+			} catch(e) {
+				console.error('Failed to load badges:', e);
+			}
+		}
+		checkBadges();
+	</script>
+</Layout>

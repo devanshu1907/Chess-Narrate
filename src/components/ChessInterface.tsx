@@ -126,6 +126,11 @@ export default function ChessInterface() {
   const [autoSpeak, setAutoSpeak] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
+  // Post-Game Review State
+  const [showGameReview, setShowGameReview] = useState(false);
+  const [gameReviewText, setGameReviewText] = useState('');
+  const [isGeneratingReview, setIsGeneratingReview] = useState(false);
+
   // Refs
   const autoplayTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const workerRef = useRef<Worker | null>(null);
@@ -737,6 +742,9 @@ export default function ChessInterface() {
 
       // Reset narration tracking
       lastNarratedFenRef.current = null;
+      setShowGameReview(false);
+      setGameReviewText('');
+      setIsGeneratingReview(false);
     } catch (err: any) {
       setError('Invalid PGN format. Please verify the move syntax.');
     }
@@ -774,6 +782,9 @@ export default function ChessInterface() {
 
       // Reset narration tracking
       lastNarratedFenRef.current = null;
+      setShowGameReview(false);
+      setGameReviewText('');
+      setIsGeneratingReview(false);
     } catch (err: any) {
       setError('Invalid FEN format. Verify the configuration values and piece placement.');
     }
@@ -808,6 +819,9 @@ export default function ChessInterface() {
     setIsAiThinking(false);
     
     lastNarratedFenRef.current = null;
+    setShowGameReview(false);
+    setGameReviewText('');
+    setIsGeneratingReview(false);
   };
 
   const handleResign = () => {
@@ -1035,6 +1049,325 @@ export default function ChessInterface() {
     });
     
     return { whiteStats, blackStats };
+  };
+
+  // Check if all moves in the game have been evaluated
+  const isGameFullyEvaluated = () => {
+    if (moves.length === 0) return false;
+    if (evalCache[loadedFenStart] === undefined) return false;
+    for (const m of moves) {
+      if (evalCache[m.fen] === undefined) return false;
+    }
+    return true;
+  };
+
+  // Get count of evaluated positions
+  const getEvaluatedCount = () => {
+    let count = 0;
+    if (evalCache[loadedFenStart] !== undefined) count++;
+    moves.forEach(m => {
+      if (evalCache[m.fen] !== undefined) count++;
+    });
+    return count;
+  };
+
+  // Move Quality Weights for Accuracy Calculations
+  const QUALITY_WEIGHTS: Record<string, number> = {
+    brilliant: 100,
+    best: 100,
+    only_move: 100,
+    book: 100,
+    excellent: 95,
+    good: 80,
+    interesting: 75,
+    unclear: 70,
+    dubious: 50,
+    mistake: 30,
+    blunder: 0
+  };
+
+  // Calculate Accuracy percentage for White or Black
+  const calculateAccuracy = (color: 'white' | 'black') => {
+    let totalWeight = 0;
+    let count = 0;
+
+    moves.forEach((_, idx) => {
+      const isWhite = idx % 2 === 0;
+      if ((color === 'white' && !isWhite) || (color === 'black' && isWhite)) return;
+
+      const qualityInfo = getMoveQualityInfo(idx);
+      const quality = qualityInfo ? qualityInfo.quality : 'good';
+      totalWeight += QUALITY_WEIGHTS[quality] !== undefined ? QUALITY_WEIGHTS[quality] : 80;
+      count++;
+    });
+
+    return count > 0 ? Math.round(totalWeight / count) : 100;
+  };
+
+  // Estimate Elo based on Accuracy
+  const estimateElo = (accuracy: number) => {
+    return Math.round(400 + Math.pow(accuracy / 100, 2) * 2100);
+  };
+
+  // Find the turning point of the game (largest evaluation drop)
+  const getTurningPoint = () => {
+    let maxDrop = 0;
+    let turningMoveIdx = -1;
+    let turningPlayer = '';
+    
+    moves.forEach((_, idx) => {
+      if (isMoveBook(idx, moves)) return;
+      const qualityInfo = getMoveQualityInfo(idx);
+      if (!qualityInfo) return;
+      
+      if (qualityInfo.change < 0) {
+        const drop = Math.abs(qualityInfo.change);
+        if (drop > maxDrop) {
+          maxDrop = drop;
+          turningMoveIdx = idx;
+          turningPlayer = idx % 2 === 0 ? 'White' : 'Black';
+        }
+      }
+    });
+    
+    return { idx: turningMoveIdx, player: turningPlayer, drop: maxDrop };
+  };
+
+  // Offline local fallback report card summary builder
+  const generateLocalReportCard = (
+    whiteAccuracy: number,
+    blackAccuracy: number,
+    whiteElo: number,
+    blackElo: number,
+    whiteStats: any,
+    blackStats: any,
+    personality: string
+  ) => {
+    const turningPoint = getTurningPoint();
+    let turningText = '';
+    if (turningPoint.idx !== -1) {
+      const moveNum = Math.floor(turningPoint.idx / 2) + 1;
+      const isWhite = turningPoint.idx % 2 === 0;
+      const moveStr = `${moveNum}.${isWhite ? '' : '..'}${moves[turningPoint.idx].san}`;
+      turningText = `The critical turning point was on move ${moveStr}, where ${turningPoint.player} dropped ${turningPoint.drop.toFixed(2)} pawns.`;
+    }
+
+    let intro = '';
+    let comparison = '';
+    let advice = '';
+
+    if (personality === 'pirate') {
+      intro = `Ahoy! A fine battle on the high seas! White fought with an accuracy of ${whiteAccuracy}% (Estimated Rating: ${whiteElo}), while Black sailed with ${blackAccuracy}% (Estimated Rating: ${blackElo}).`;
+      if (turningText) {
+        comparison = ` Shiver me timbers! ${turningText} This is where the crew walked the plank!`;
+      }
+      advice = ` Keep yer eyes on the horizon and guard yer treasure next time, ye scallywags!`;
+    } else if (personality === 'sarcastic') {
+      intro = `Well, that was certainly a game of chess. White played with ${whiteAccuracy}% accuracy (Elo: ${whiteElo}), and Black managed ${blackAccuracy}% (Elo: ${blackElo}).`;
+      if (turningText) {
+        comparison = ` ${turningText} Stockfish wept. A truly historic donation of material.`;
+      } else {
+        comparison = ` Surprisingly, neither side blundered into oblivion. A miracle.`;
+      }
+      advice = ` Perhaps both of you should practice against a brick wall. It might make fewer mistakes.`;
+    } else if (personality === 'grandmaster') {
+      intro = `The match concluded with White showing an accuracy rating of ${whiteAccuracy}% (Est. Elo: ${whiteElo}), compared to Black's ${blackAccuracy}% (Est. Elo: ${blackElo}).`;
+      if (turningText) {
+        comparison = ` Positional balance collapsed under pressure. ${turningText} This tactical error determined the outcome.`;
+      }
+      advice = ` Refine your opening setups and focus on calculating forcing lines.`;
+    } else {
+      intro = `What a fantastic game! White played with a wonderful ${whiteAccuracy}% accuracy (Estimated Elo: ${whiteElo}), and Black showed great effort at ${blackAccuracy}% (Estimated Elo: ${blackElo}).`;
+      if (turningText) {
+        comparison = ` ${turningText} Don't worry, mistakes are the best way to learn!`;
+      }
+      advice = ` Focus on keeping your pieces defended and look out for forks. Keep practicing!`;
+    }
+
+    return `${intro}${comparison}${advice}`;
+  };
+
+  // Render the post-game review panel
+  const renderGameReview = () => {
+    const { whiteStats, blackStats } = calculateStats();
+    const whiteAccuracy = calculateAccuracy('white');
+    const blackAccuracy = calculateAccuracy('black');
+    const whiteElo = estimateElo(whiteAccuracy);
+    const blackElo = estimateElo(blackAccuracy);
+
+    // Filter key moments (Brilliants, Blunders, Mistakes)
+    const keyMoments: { idx: number; move: MoveItem; qualityInfo: any; isWhite: boolean }[] = [];
+    moves.forEach((move, idx) => {
+      const qualityInfo = getMoveQualityInfo(idx);
+      if (qualityInfo && (qualityInfo.quality === 'brilliant' || qualityInfo.quality === 'blunder' || qualityInfo.quality === 'mistake')) {
+        keyMoments.push({ idx, move, qualityInfo, isWhite: idx % 2 === 0 });
+      }
+    });
+
+    const handleGenerateReview = async () => {
+      setIsGeneratingReview(true);
+      try {
+        let review = '';
+        if (useGemini && geminiApiKey.trim()) {
+          const turningPoint = getTurningPoint();
+          let turningPointText = '';
+          if (turningPoint.idx !== -1) {
+            const moveNum = Math.floor(turningPoint.idx / 2) + 1;
+            const isWhite = turningPoint.idx % 2 === 0;
+            const moveStr = `${moveNum}.${isWhite ? '' : '..'}${moves[turningPoint.idx].san}`;
+            turningPointText = `The critical turning point occurred on move ${moveStr} when ${turningPoint.player} made a mistake/blunder that dropped the evaluation by ${turningPoint.drop.toFixed(2)} pawns.`;
+          }
+
+          const pgnString = moves.map((m, i) => `${i % 2 === 0 ? `${Math.floor(i / 2) + 1}. ` : ''}${m.san}`).join(' ');
+
+          const prompt = `You are a professional, witty chess coach and analyst. Write a post-game "report card" summary for this chess match in the voice of a ${narratorPersonality} chess commentator.
+Here are the game details:
+Moves played: ${pgnString}
+White Accuracy: ${whiteAccuracy}% (Estimated Elo: ${whiteElo})
+Black Accuracy: ${blackAccuracy}% (Estimated Elo: ${blackElo})
+White Move Breakdown: Brilliants: ${whiteStats.brilliant}, Bests: ${whiteStats.best}, Excellents: ${whiteStats.excellent}, Goods: ${whiteStats.good}, Books: ${whiteStats.book}, Mistakes: ${whiteStats.mistake}, Blunders: ${whiteStats.blunder}
+Black Move Breakdown: Brilliants: ${blackStats.brilliant}, Bests: ${blackStats.best}, Excellents: ${blackStats.excellent}, Goods: ${blackStats.good}, Books: ${blackStats.book}, Mistakes: ${blackStats.mistake}, Blunders: ${blackStats.blunder}
+${turningPointText}
+
+Please write a cohesive, engaging summary paragraph of about 80-120 words. Focus on the overall narrative of the game, how the players started, the critical turning point, and what they need to work on. Speak directly to the players or the reader. Keep the tone highly customized to your ${narratorPersonality} personality (e.g. dry sarcastic jabs for sarcastic, pirate lingo for pirate, supportive advice for supportive, and strict academic positional analysis for grandmaster). Do not include FEN coordinates or raw score change numbers.`;
+
+          const res = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiApiKey.trim()}`,
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                contents: [{ parts: [{ text: prompt }] }],
+                generationConfig: {
+                  maxOutputTokens: 250,
+                  temperature: 0.85
+                }
+              })
+            }
+          );
+
+          if (!res.ok) {
+            const errData = await res.json();
+            throw new Error(errData.error?.message || 'API request failed');
+          }
+
+          const data = await res.json();
+          review = data.contents?.[0]?.parts?.[0]?.text || '';
+          review = review.trim().replace(/^"|"$/g, '');
+        } else {
+          review = generateLocalReportCard(whiteAccuracy, blackAccuracy, whiteElo, blackElo, whiteStats, blackStats, narratorPersonality);
+        }
+        setGameReviewText(review);
+      } catch (err: any) {
+        console.error("Game Review API Error:", err);
+        const fallback = generateLocalReportCard(whiteAccuracy, blackAccuracy, whiteElo, blackElo, whiteStats, blackStats, narratorPersonality);
+        setGameReviewText(`[Gemini Error: ${err.message}]. Fallback:\n\n${fallback}`);
+      } finally {
+        setIsGeneratingReview(false);
+      }
+    };
+
+    return (
+      <div className="flex flex-col gap-5 flex-grow animate-fadeIn">
+        {/* 1. Accuracy & Estimated Elo Panels */}
+        <div className="grid grid-cols-2 gap-4">
+          <div className="border border-brand-hairline rounded-md p-4 bg-brand-canvas shadow-lvl2 text-center flex flex-col gap-1">
+            <span className="text-[10px] font-mono uppercase text-brand-body">White Accuracy</span>
+            <span className="text-3xl font-sans font-semibold text-brand-ink">{whiteAccuracy}%</span>
+            <span className="text-xs font-mono text-brand-mute">Est. Rating: {whiteElo}</span>
+          </div>
+
+          <div className="border border-brand-hairline rounded-md p-4 bg-brand-canvas shadow-lvl2 text-center flex flex-col gap-1">
+            <span className="text-[10px] font-mono uppercase text-brand-body">Black Accuracy</span>
+            <span className="text-3xl font-sans font-semibold text-brand-ink">{blackAccuracy}%</span>
+            <span className="text-xs font-mono text-brand-mute">Est. Rating: {blackElo}</span>
+          </div>
+        </div>
+
+        {/* 2. AI Coach Review Summary */}
+        <div className="border border-brand-hairline rounded-md p-4 bg-brand-canvas-soft2 flex flex-col gap-3">
+          <div className="flex justify-between items-center select-none">
+            <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-brand-ink">
+              AI Coach Report Card
+            </h3>
+            {gameReviewText && (
+              <button
+                onClick={() => speakText(gameReviewText)}
+                className="p-1.5 rounded-sm border border-brand-hairline bg-brand-canvas hover:bg-brand-canvas-soft2 text-brand-body hover:text-brand-ink transition-colors cursor-pointer"
+                title="Listen to summary"
+                aria-label="Listen to report card summary"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19.114 5.636a9 9 0 010 12.728M16.463 8.288a5.25 5.25 0 010 7.424M6.75 8.25l4.72-4.72a.75.75 0 011.28.53v15.88a.75.75 0 01-1.28.53l-4.72-4.72H4.51c-.88 0-1.704-.507-1.938-1.354A9.01 9.01 0 012.25 12c0-.83.112-1.633.322-2.396C2.806 8.756 3.63 8.25 4.51 8.25H6.75z"></path>
+                </svg>
+              </button>
+            )}
+          </div>
+
+          {gameReviewText ? (
+            <p className="text-xs font-sans text-brand-body leading-relaxed whitespace-pre-line animate-fadeIn">
+              {gameReviewText}
+            </p>
+          ) : (
+            <div className="py-4 text-center">
+              <p className="text-xs text-brand-body mb-3">
+                Get a personalized tactical breakdown of your match.
+              </p>
+              <button
+                onClick={handleGenerateReview}
+                disabled={isGeneratingReview}
+                className="px-4 py-2 rounded-pill text-xs font-semibold bg-brand-primary text-brand-on-primary hover:opacity-90 disabled:opacity-50 transition-all cursor-pointer shadow-lvl2"
+              >
+                {isGeneratingReview ? 'Analyzing Game Narrative...' : 'Generate Game Review'}
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* 3. Key Moments Navigation */}
+        <div className="flex-grow">
+          <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-brand-ink mb-3 select-none">
+            Key Moments ({keyMoments.length})
+          </h3>
+          {keyMoments.length > 0 ? (
+            <div className="flex flex-wrap gap-2 max-h-[160px] overflow-y-auto pr-1">
+              {keyMoments.map(({ idx, move, qualityInfo, isWhite }) => {
+                const moveNum = Math.floor(idx / 2) + 1;
+                const isSelected = idx === currentMoveIndex;
+                return (
+                  <button
+                    key={idx}
+                    onClick={() => {
+                      setCurrentMoveIndex(idx);
+                      setPositionFen(move.fen);
+                    }}
+                    className={`px-2.5 py-1.5 rounded-sm text-xs font-mono transition-all border flex items-center gap-1.5 cursor-pointer shadow-lvl1 hover:shadow-lvl2 ${
+                      isSelected
+                        ? 'border-brand-accent bg-brand-accent/5 text-brand-ink ring-1 ring-brand-accent'
+                        : 'border-brand-hairline bg-brand-canvas text-brand-body hover:text-brand-ink'
+                    }`}
+                  >
+                    <span>{qualityInfo.icon}</span>
+                    <span className="font-semibold text-brand-ink">
+                      {moveNum}{isWhite ? '.' : '..'}{move.san}
+                    </span>
+                    <span className={`text-[10px] lowercase ${qualityInfo.colorClass}`}>
+                      ({qualityInfo.label})
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="text-xs font-mono text-brand-mute italic py-2">
+              No major blunders or mistakes detected. An exceptionally clean game!
+            </p>
+          )}
+        </div>
+      </div>
+    );
   };
 
   // Helper to copy FEN or PGN to clipboard
@@ -1974,30 +2307,79 @@ export default function ChessInterface() {
  
         {/* Moves History Card Container */}
         <div className="bg-brand-canvas border border-brand-hairline rounded-md p-6 shadow-lvl2 flex flex-col flex-grow min-h-[300px]">
-          <h2 className="text-sm font-mono text-brand-body border-b border-brand-hairline pb-3 mb-3 select-none">
-            Moves List
-          </h2>
-          {renderMoveList()}
-
-          {/* Move quality statistics */}
-          {renderStatsSummary()}
-
-          {/* Copy Buttons */}
-          {moves.length > 0 && (
-            <div className="flex gap-2 mt-4 pt-4 border-t border-brand-hairline justify-end">
+          <div className="flex justify-between items-center border-b border-brand-hairline pb-3 mb-3 select-none">
+            <div className="flex gap-2">
               <button
-                onClick={() => handleCopyText('pgn')}
-                className="px-3 py-1.5 rounded-sm text-xs font-mono border border-brand-hairline bg-brand-canvas hover:bg-brand-canvas-soft2 text-brand-ink transition-colors flex items-center gap-1.5 cursor-pointer shadow-lvl1 hover:shadow-lvl2"
+                onClick={() => setShowGameReview(false)}
+                className={`text-xs font-mono font-bold uppercase tracking-wider px-3 py-1.5 rounded-sm transition-all cursor-pointer ${
+                  !showGameReview 
+                    ? 'bg-brand-canvas-soft2 text-brand-ink border border-brand-hairline shadow-sm' 
+                    : 'text-brand-body hover:text-brand-ink hover:bg-brand-canvas-soft2/50 border border-transparent'
+                }`}
               >
-                {copiedText === 'pgn' ? 'Copied PGN!' : 'Copy PGN'}
+                Moves List
               </button>
               <button
-                onClick={() => handleCopyText('fen')}
-                className="px-3 py-1.5 rounded-sm text-xs font-mono border border-brand-hairline bg-brand-canvas hover:bg-brand-canvas-soft2 text-brand-ink transition-colors flex items-center gap-1.5 cursor-pointer shadow-lvl1 hover:shadow-lvl2"
+                onClick={() => {
+                  if (moves.length > 0 && isGameFullyEvaluated()) {
+                    setShowGameReview(true);
+                  }
+                }}
+                disabled={moves.length === 0}
+                className={`text-xs font-mono font-bold uppercase tracking-wider px-3 py-1.5 rounded-sm transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${
+                  showGameReview 
+                    ? 'bg-brand-canvas-soft2 text-brand-ink border border-brand-hairline shadow-sm' 
+                    : 'text-brand-body hover:text-brand-ink hover:bg-brand-canvas-soft2/50 border border-transparent'
+                }`}
+                title={moves.length === 0 ? 'Play some moves first' : (!isGameFullyEvaluated() ? 'Engine is still evaluating...' : 'View post-game report card')}
               >
-                {copiedText === 'fen' ? 'Copied FEN!' : 'Copy FEN'}
+                Game Review
               </button>
             </div>
+            
+            {/* Show evaluation progress if queue is running */}
+            {moves.length > 0 && !isGameFullyEvaluated() && (
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-mono text-brand-accent animate-pulse">
+                  Analyzing ({getEvaluatedCount()}/{moves.length + 1})
+                </span>
+                <div className="w-16 sm:w-24 bg-brand-canvas-soft2 h-1 rounded-full overflow-hidden border border-brand-hairline">
+                  <div 
+                    className="bg-brand-accent h-full transition-all duration-300"
+                    style={{ width: `${(getEvaluatedCount() / (moves.length + 1)) * 100}%` }}
+                  ></div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {showGameReview ? (
+            renderGameReview()
+          ) : (
+            <>
+              {renderMoveList()}
+
+              {/* Move quality statistics */}
+              {renderStatsSummary()}
+
+              {/* Copy Buttons */}
+              {moves.length > 0 && (
+                <div className="flex gap-2 mt-4 pt-4 border-t border-brand-hairline justify-end">
+                  <button
+                    onClick={() => handleCopyText('pgn')}
+                    className="px-3 py-1.5 rounded-sm text-xs font-mono border border-brand-hairline bg-brand-canvas hover:bg-brand-canvas-soft2 text-brand-ink transition-colors flex items-center gap-1.5 cursor-pointer shadow-lvl1 hover:shadow-lvl2"
+                  >
+                    {copiedText === 'pgn' ? 'Copied PGN!' : 'Copy PGN'}
+                  </button>
+                  <button
+                    onClick={() => handleCopyText('fen')}
+                    className="px-3 py-1.5 rounded-sm text-xs font-mono border border-brand-hairline bg-brand-canvas hover:bg-brand-canvas-soft2 text-brand-ink transition-colors flex items-center gap-1.5 cursor-pointer shadow-lvl1 hover:shadow-lvl2"
+                  >
+                    {copiedText === 'fen' ? 'Copied FEN!' : 'Copy FEN'}
+                  </button>
+                </div>
+              )}
+            </>
           )}
         </div>
  

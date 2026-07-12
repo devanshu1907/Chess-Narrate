@@ -1,0 +1,30 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import StoryPlayer from '../../components/StoryPlayer.tsx';
+import { STORIES, getStoryBySlug } from '../../data/stories';
+
+export function getStaticPaths() {
+	return STORIES.map((story) => ({
+		params: { slug: story.slug },
+	}));
+}
+
+const { slug } = Astro.params;
+const story = getStoryBySlug(slug as string);
+
+if (!story) {
+	return Astro.redirect('/stories');
+}
+---
+
+<Layout 
+	title={`${story.title} — Interactive Chess Story | ChessNarrate`}
+	description={`${story.subtitle} (${story.year}). ${story.description.slice(0, 140)}...`}
+>
+	<section class="max-w-5xl mx-auto flex flex-col gap-4 py-4 font-sans">
+		<a href="/stories" class="text-xs font-mono text-brand-accent hover:underline flex items-center gap-1.5 w-fit select-none">
+			&larr; Back to Stories
+		</a>
+		<StoryPlayer story={story} client:only="react" />
+	</section>
+</Layout>
