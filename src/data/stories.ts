@@ -1,6 +1,33 @@
 // Famous Chess Games — Story Mode Data
 // All PGNs are public domain historical games
 
+export type MoveQuality =
+  | 'brilliant'
+  | 'best'
+  | 'excellent'
+  | 'good'
+  | 'book'
+  | 'interesting'
+  | 'unclear'
+  | 'dubious'
+  | 'mistake'
+  | 'blunder'
+  | 'only_move';
+
+export interface MoveStats {
+  brilliant: number;
+  best: number;
+  excellent: number;
+  good: number;
+  book: number;
+  interesting: number;
+  unclear: number;
+  dubious: number;
+  mistake: number;
+  blunder: number;
+  only_move: number;
+}
+
 export interface StoryGame {
   slug: string;
   title: string;
@@ -14,6 +41,12 @@ export interface StoryGame {
     name: string;
     icon: string;
   };
+  // Pre-computed move classifications from Stockfish analysis
+  moveClassifications: MoveQuality[];
+  whiteAccuracy: number;
+  blackAccuracy: number;
+  whiteStats: MoveStats;
+  blackStats: MoveStats;
 }
 
 export const STORIES: StoryGame[] = [
@@ -35,6 +68,11 @@ export const STORIES: StoryGame[] = [
       name: 'Immortal Survivor',
       icon: '⚔️',
     },
+    moveClassifications: ["book","book","book","book","book","unclear","best","dubious","best","book","best","best","good","dubious","dubious","best","best","unclear","good","dubious","best","mistake","best","best","best","good","best","best","best","best","best","mistake","dubious","best","blunder","blunder","good","best","best","blunder","brilliant","only_move","brilliant","best","brilliant"],
+    whiteAccuracy: 89,
+    blackAccuracy: 74,
+    whiteStats: { brilliant: 3, best: 11, excellent: 0, good: 3, book: 3, interesting: 0, dubious: 2, mistake: 0, blunder: 1, only_move: 0, unclear: 0 },
+    blackStats: { brilliant: 0, best: 8, excellent: 0, good: 1, book: 3, interesting: 0, dubious: 3, mistake: 2, blunder: 2, only_move: 1, unclear: 2 },
   },
   {
     slug: 'evergreen-game',
@@ -54,6 +92,11 @@ export const STORIES: StoryGame[] = [
       name: 'Evergreen Scholar',
       icon: '🌿',
     },
+    moveClassifications: ["book","book","book","book","book","unclear","good","best","best","unclear","best","best","unclear","good","best","best","best","best","good","best","good","mistake","best","best","best","good","best","dubious","best","mistake","best","good","blunder","best","best","best","blunder","mistake","best","blunder","brilliant","best","brilliant","best","brilliant","best","brilliant"],
+    whiteAccuracy: 88,
+    blackAccuracy: 79,
+    whiteStats: { brilliant: 4, best: 11, excellent: 0, good: 3, book: 3, interesting: 0, dubious: 0, mistake: 0, blunder: 2, only_move: 0, unclear: 1 },
+    blackStats: { brilliant: 0, best: 11, excellent: 0, good: 3, book: 2, interesting: 0, dubious: 1, mistake: 3, blunder: 1, only_move: 0, unclear: 2 },
   },
   {
     slug: 'opera-game',
@@ -73,6 +116,11 @@ export const STORIES: StoryGame[] = [
       name: 'Opera Virtuoso',
       icon: '🎭',
     },
+    moveClassifications: ["book","book","book","book","book","book","best","book","best","best","excellent","dubious","best","best","dubious","best","best","dubious","best","dubious","best","mistake","best","good","best","best","best","mistake","blunder","blunder","brilliant","only_move","brilliant"],
+    whiteAccuracy: 91,
+    blackAccuracy: 74,
+    whiteStats: { brilliant: 2, best: 9, excellent: 1, good: 0, book: 3, interesting: 0, dubious: 1, mistake: 0, blunder: 1, only_move: 0, unclear: 0 },
+    blackStats: { brilliant: 0, best: 4, excellent: 0, good: 1, book: 4, interesting: 0, dubious: 3, mistake: 2, blunder: 1, only_move: 1, unclear: 0 },
   },
   {
     slug: 'game-of-the-century',
@@ -92,6 +140,11 @@ export const STORIES: StoryGame[] = [
       name: 'Century Legend',
       icon: '👑',
     },
+    moveClassifications: ["book","book","book","book","book","book","book","book","good","book","unclear","unclear","best","best","best","good","unclear","unclear","good","best","good","best","best","best","best","best","best","best","best","best","excellent","best","best","best","mistake","best","best","best","only_move","best","best","best","only_move","best","best","best","best","good","best","best","good","good","mistake","best","excellent","mistake","mistake","best","best","excellent","excellent","best","best","good","excellent","best","mistake","best","mistake","mistake","best","best","only_move","best","only_move","best","only_move","brilliant","only_move","brilliant","only_move","brilliant"],
+    whiteAccuracy: 88,
+    blackAccuracy: 93,
+    whiteStats: { brilliant: 0, best: 15, excellent: 4, good: 4, book: 4, interesting: 0, dubious: 0, mistake: 5, blunder: 0, only_move: 7, unclear: 2 },
+    blackStats: { brilliant: 3, best: 24, excellent: 1, good: 4, book: 5, interesting: 0, dubious: 0, mistake: 2, blunder: 0, only_move: 0, unclear: 2 },
   },
   {
     slug: 'kasparovs-immortal',
@@ -111,6 +164,11 @@ export const STORIES: StoryGame[] = [
       name: 'Immortal Tactician',
       icon: '🔥',
     },
+    moveClassifications: ["book","book","book","book","book","book","unclear","book","unclear","book","unclear","best","good","best","best","best","best","unclear","best","best","good","good","good","good","good","good","good","best","unclear","unclear","unclear","best","unclear","unclear","unclear","unclear","best","best","unclear","best","best","best","best","best","best","best","best","mistake","best","best","best","best","best","best","best","best","best","best","best","best","best","best","best","only_move","dubious","best","best","best","best","best","best","best","best","best","best","best","best","best","best","good","best","best","best","mistake","best","good","best"],
+    whiteAccuracy: 91,
+    blackAccuracy: 92,
+    whiteStats: { brilliant: 0, best: 27, excellent: 0, good: 5, book: 3, interesting: 0, dubious: 1, mistake: 0, blunder: 0, only_move: 0, unclear: 8 },
+    blackStats: { brilliant: 0, best: 26, excellent: 0, good: 5, book: 5, interesting: 0, dubious: 0, mistake: 2, blunder: 0, only_move: 1, unclear: 4 },
   },
   {
     slug: 'deep-blue-vs-kasparov',
@@ -130,6 +188,11 @@ export const STORIES: StoryGame[] = [
       name: 'Machine Witness',
       icon: '🤖',
     },
+    moveClassifications: ["book","book","book","book","book","best","best","unclear","unclear","best","best","best","best","mistake","best","good","best","best","best","best","best","excellent","excellent","best","best","good","best","excellent","best","best","best","good","best","best","best","interesting","best"],
+    whiteAccuracy: 98,
+    blackAccuracy: 89,
+    whiteStats: { brilliant: 0, best: 14, excellent: 1, good: 0, book: 3, interesting: 0, dubious: 0, mistake: 0, blunder: 0, only_move: 0, unclear: 1 },
+    blackStats: { brilliant: 0, best: 8, excellent: 2, good: 3, book: 2, interesting: 1, dubious: 0, mistake: 1, blunder: 0, only_move: 0, unclear: 1 },
   },
 ];
 

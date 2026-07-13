@@ -1,7 +1,174 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Chess } from 'chess.js';
 import { Chessboard } from 'react-chessboard';
-import type { StoryGame } from '../data/stories';
+import type { StoryGame, MoveQuality } from '../data/stories';
+
+// ── Move quality helpers ──────────────────────────────────────────────────────
+
+const QUALITY_LABEL: Record<MoveQuality, string> = {
+  brilliant: 'Brilliant!!',
+  best: 'Best',
+  excellent: 'Excellent',
+  good: 'Good',
+  book: 'Book',
+  interesting: 'Interesting',
+  unclear: 'Unclear',
+  dubious: 'Dubious',
+  mistake: 'Mistake',
+  blunder: 'Blunder',
+  only_move: 'Only Move',
+};
+
+const QUALITY_SYMBOL: Record<MoveQuality, string> = {
+  brilliant: '!!',
+  best: '',
+  excellent: '!',
+  good: '',
+  book: '',
+  interesting: '!?',
+  unclear: '∞',
+  dubious: '?!',
+  mistake: '?',
+  blunder: '??',
+  only_move: '□',
+};
+
+const QUALITY_COLOR: Record<MoveQuality, string> = {
+  brilliant: '#26c6da',   // cyan (matches ChessInterface.tsx)
+  best: '#22c55e',        // green
+  excellent: '#4ade80',   // light green
+  good: '#86efac',        // pale green
+  book: '#8b5a2b',        // brown/ochre (matches ChessInterface.tsx)
+  interesting: '#fb923c', // orange
+  unclear: '#94a3b8',     // slate
+  dubious: '#f97316',     // orange
+  mistake: '#f87171',     // red-ish
+  blunder: '#ef4444',     // red
+  only_move: '#60a5fa',   // blue
+};
+
+const QUALITY_BG: Record<MoveQuality, string> = {
+  brilliant: 'rgba(38, 198, 218, 0.15)',
+  best: 'rgba(34,197,94,0.12)',
+  excellent: 'rgba(74,222,128,0.12)',
+  good: 'transparent',
+  book: 'rgba(139, 90, 43, 0.15)',
+  interesting: 'rgba(251,146,60,0.12)',
+  unclear: 'rgba(148,163,184,0.10)',
+  dubious: 'rgba(249,115,22,0.12)',
+  mistake: 'rgba(248,113,113,0.12)',
+  blunder: 'rgba(239,68,68,0.15)',
+  only_move: 'rgba(96,165,250,0.12)',
+};
+
+const QUALITY_ICON: Record<MoveQuality, string> = {
+  brilliant: '!!',
+  best: '✓',
+  excellent: '★',
+  good: '✓',
+  book: '📖',
+  interesting: '!?',
+  unclear: '∞',
+  dubious: '?!',
+  mistake: '?',
+  blunder: '??',
+  only_move: '□',
+};
+
+// Client-side Web Audio synthesized sound effects
+let audioCtx: AudioContext | null = null;
+const playChessSound = (type: 'move' | 'capture' | 'check') => {
+  if (typeof window === 'undefined') return;
+  const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+  if (!AudioContextClass) return;
+  
+  try {
+    if (!audioCtx) {
+      audioCtx = new AudioContextClass();
+    }
+    const ctx = audioCtx;
+    if (ctx.state === 'suspended') {
+      ctx.resume();
+    }
+    
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    
+    if (type === 'move') {
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(320, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(120, ctx.currentTime + 0.08);
+      gain.gain.setValueAtTime(0.18, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.08);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.08);
+    } else if (type === 'capture') {
+      const osc2 = ctx.createOscillator();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(400, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(100, ctx.currentTime + 0.1);
+      osc2.type = 'triangle';
+      osc2.frequency.setValueAtTime(580, ctx.currentTime);
+      osc2.frequency.exponentialRampToValueAtTime(140, ctx.currentTime + 0.06);
+      gain.gain.setValueAtTime(0.2, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.1);
+      osc.connect(gain);
+      osc2.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc2.start();
+      osc.stop(ctx.currentTime + 0.1);
+      osc2.stop(ctx.currentTime + 0.1);
+    } else if (type === 'check') {
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(520, ctx.currentTime);
+      osc.frequency.setValueAtTime(680, ctx.currentTime + 0.05);
+      gain.gain.setValueAtTime(0.15, ctx.currentTime);
+      gain.gain.setValueAtTime(0.15, ctx.currentTime + 0.05);
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.12);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.12);
+    }
+  } catch (e) {
+    console.warn('Failed to play synthesized sound:', e);
+  }
+};
+
+
+
+
+function MoveQualityBadge({ quality }: { quality: MoveQuality }) {
+  const symbol = QUALITY_SYMBOL[quality];
+  if (!symbol && quality !== 'best' && quality !== 'good') return null;
+  if (!symbol) return null;
+  return (
+    <span
+      title={QUALITY_LABEL[quality]}
+      style={{ color: QUALITY_COLOR[quality], fontSize: '0.7em', fontWeight: 700, letterSpacing: '-0.02em' }}
+    >{symbol}</span>
+  );
+}
+
+function QualityDot({ quality }: { quality: MoveQuality }) {
+  return (
+    <span
+      title={QUALITY_LABEL[quality]}
+      style={{
+        display: 'inline-block',
+        width: 7,
+        height: 7,
+        borderRadius: '50%',
+        backgroundColor: QUALITY_COLOR[quality],
+        flexShrink: 0,
+        marginTop: 1,
+      }}
+    />
+  );
+}
 
 interface MoveItem {
   san: string;
@@ -54,6 +221,7 @@ export default function StoryPlayer({ story }: { story: StoryGame }) {
   const [boardOrientation, setBoardOrientation] = useState<'white' | 'black'>('white');
   const [isAutoPlaying, setIsAutoPlaying] = useState(false);
   const autoplayRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const prevMoveIndexRef = useRef(-1);
 
   // TTS State
   const [autoSpeak, setAutoSpeak] = useState(() => {
@@ -202,6 +370,30 @@ export default function StoryPlayer({ story }: { story: StoryGame }) {
       if (autoplayRef.current) clearInterval(autoplayRef.current);
     };
   }, [isAutoPlaying, isChallengeActive, moves, story]);
+
+  // Trigger synthesized sound effects on move changes
+  useEffect(() => {
+    if (currentMoveIndex !== prevMoveIndexRef.current) {
+      const prev = prevMoveIndexRef.current;
+      prevMoveIndexRef.current = currentMoveIndex;
+      
+      // Play sound on stepping forward or backward
+      if (currentMoveIndex > -1) {
+        const move = moves[currentMoveIndex];
+        if (move) {
+          if (move.san.includes('#') || move.san.includes('+')) {
+            playChessSound('check');
+          } else if (move.san.includes('x')) {
+            playChessSound('capture');
+          } else {
+            playChessSound('move');
+          }
+        }
+      } else if (currentMoveIndex === -1 && prev > -1) {
+        playChessSound('move'); // Board reset sound
+      }
+    }
+  }, [currentMoveIndex, moves]);
 
   // Check for challenge activation when move index changes
   useEffect(() => {
@@ -358,6 +550,16 @@ export default function StoryPlayer({ story }: { story: StoryGame }) {
       setCorrectGuesses((p) => p + 1);
       setTotalChallenges((p) => p + 1);
 
+      // Play sound immediately on correct drop
+      if (correctMove.san.includes('#') || correctMove.san.includes('+')) {
+        playChessSound('check');
+      } else if (correctMove.san.includes('x')) {
+        playChessSound('capture');
+      } else {
+        playChessSound('move');
+      }
+      prevMoveIndexRef.current = challengeIndex;
+
       const praise: Record<Personality, string> = {
         sarcastic: `Well, well. You actually found it. ${correctMove.san}. I'm almost impressed.`,
         supportive: `Brilliant! You found ${correctMove.san}! That's exactly what was played. Amazing intuition!`,
@@ -429,9 +631,61 @@ export default function StoryPlayer({ story }: { story: StoryGame }) {
   const lastMove = currentMoveIndex >= 0 ? moves[currentMoveIndex] : null;
   const customSquareStyles: Record<string, React.CSSProperties> = {};
   if (lastMove) {
-    customSquareStyles[lastMove.from] = { backgroundColor: 'rgba(0, 112, 243, 0.25)' };
-    customSquareStyles[lastMove.to] = { backgroundColor: 'rgba(0, 112, 243, 0.4)' };
+    customSquareStyles[lastMove.from] = { backgroundColor: 'rgba(0, 112, 243, 0.12)' };
+    const quality = story.moveClassifications[currentMoveIndex] as MoveQuality | undefined;
+    if (quality) {
+      const highlightColors: Record<MoveQuality, string> = {
+        book: 'rgba(139, 90, 43, 0.25)',
+        brilliant: 'rgba(38, 198, 218, 0.25)',
+        best: 'rgba(16, 185, 129, 0.25)',
+        excellent: 'rgba(102, 187, 106, 0.25)',
+        only_move: 'rgba(148, 163, 184, 0.25)',
+        unclear: 'rgba(120, 144, 156, 0.25)',
+        interesting: 'rgba(236, 64, 122, 0.25)',
+        dubious: 'rgba(171, 71, 188, 0.25)',
+        mistake: 'rgba(249, 115, 22, 0.25)',
+        blunder: 'rgba(239, 68, 68, 0.25)',
+        good: 'rgba(0, 112, 243, 0.15)',
+      };
+      customSquareStyles[lastMove.to] = { backgroundColor: highlightColors[quality] ?? 'rgba(0, 112, 243, 0.25)' };
+    } else {
+      customSquareStyles[lastMove.to] = { backgroundColor: 'rgba(0, 112, 243, 0.25)' };
+    }
   }
+
+  // Custom square renderer to show move quality emoticons on the board
+  const CustomSquareRenderer = React.useCallback(({ square, children }: any) => {
+    const currentMove = (currentMoveIndex >= 0 && currentMoveIndex < moves.length) ? moves[currentMoveIndex] : null;
+    const isDestination = currentMove && currentMove.to === square;
+
+    let badge = null;
+    if (isDestination) {
+      const quality = story.moveClassifications[currentMoveIndex] as MoveQuality | undefined;
+      if (quality) {
+        const icon = QUALITY_ICON[quality];
+        if (icon) {
+          badge = (
+            <div
+              className="absolute top-0.5 right-0.5 z-10 w-4 h-4 md:w-5 md:h-5 rounded-full flex items-center justify-center text-[8px] md:text-[10px] font-bold text-white shadow-md select-none pointer-events-none"
+              style={{ backgroundColor: QUALITY_COLOR[quality] }}
+              title={QUALITY_LABEL[quality]}
+            >
+              {icon}
+            </div>
+          );
+        }
+      }
+    }
+
+    const highlightStyle = customSquareStyles[square] || {};
+
+    return (
+      <div style={{ position: 'relative', width: '100%', height: '100%', ...highlightStyle }}>
+        {children}
+        {badge}
+      </div>
+    );
+  }, [currentMoveIndex, moves, customSquareStyles, story.moveClassifications]);
 
   // Progress percentage
   const progress = moves.length > 0 ? Math.round(((currentMoveIndex + 1) / moves.length) * 100) : 0;
@@ -462,8 +716,9 @@ export default function StoryPlayer({ story }: { story: StoryGame }) {
                 id: 'story-board',
                 position: positionFen,
                 boardOrientation: boardOrientation,
-                onPieceDrop: ({ sourceSquare, targetSquare }) => onDrop(sourceSquare, targetSquare),
+                onPieceDrop: ({ sourceSquare, targetSquare }) => onDrop(sourceSquare as string, targetSquare as string),
                 allowDragging: isChallengeActive && challengeResult === 'pending',
+                squareRenderer: CustomSquareRenderer,
                 squareStyles: customSquareStyles,
                 darkSquareStyle: { backgroundColor: 'var(--color-board-dark)' },
                 lightSquareStyle: { backgroundColor: 'var(--color-board-light)' },
@@ -650,18 +905,20 @@ export default function StoryPlayer({ story }: { story: StoryGame }) {
           {/* Moves History */}
           <div className="bg-brand-canvas border border-brand-hairline rounded-md p-4 shadow-lvl2 flex-grow">
             <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-brand-ink mb-3 select-none">
-              Moves Played
+              Move Ledger
             </h3>
             <div className="max-h-[240px] overflow-y-auto pr-1">
-              <div className="grid grid-cols-[auto_1fr_1fr] gap-x-3 gap-y-1 text-xs font-mono">
+              <div className="grid gap-x-2 gap-y-0.5 text-xs font-mono" style={{ gridTemplateColumns: 'auto 1fr 1fr' }}>
                 {Array.from({ length: Math.ceil(moves.length / 2) }).map((_, i) => {
                   const whiteIdx = i * 2;
                   const blackIdx = i * 2 + 1;
                   const whiteMove = moves[whiteIdx];
                   const blackMove = blackIdx < moves.length ? moves[blackIdx] : null;
+                  const whiteQ = story.moveClassifications[whiteIdx] as MoveQuality | undefined;
+                  const blackQ = blackIdx < moves.length ? story.moveClassifications[blackIdx] as MoveQuality | undefined : undefined;
                   return (
                     <React.Fragment key={i}>
-                      <span className="text-brand-mute text-right pr-1">{i + 1}.</span>
+                      <span className="text-brand-mute text-right pr-1 py-0.5">{i + 1}.</span>
                       <button
                         onClick={() => {
                           if (!isChallengeActive) {
@@ -669,15 +926,37 @@ export default function StoryPlayer({ story }: { story: StoryGame }) {
                             setPositionFen(whiteMove.fen);
                           }
                         }}
-                        className={`text-left px-1.5 py-0.5 rounded-xs transition-colors cursor-pointer ${
+                        className={`text-left px-1.5 py-0.5 rounded-xs transition-colors cursor-pointer flex items-center gap-1 ${
                           currentMoveIndex === whiteIdx
-                            ? 'bg-brand-accent/10 text-brand-accent font-semibold'
+                            ? 'font-semibold'
                             : 'text-brand-ink hover:bg-brand-canvas-soft2'
                         }`}
+                        style={currentMoveIndex === whiteIdx ? { backgroundColor: whiteQ ? QUALITY_BG[whiteQ] : 'rgba(0,112,243,0.08)', color: whiteQ ? QUALITY_COLOR[whiteQ] : 'var(--color-brand-accent)' } : (whiteQ && whiteQ !== 'good' && whiteQ !== 'best' ? { backgroundColor: QUALITY_BG[whiteQ] } : {})}
                       >
-                        {whiteMove.san}
+                        {whiteQ && <QualityDot quality={whiteQ} />}
+                        <span>{whiteMove.san}</span>
+                        {whiteQ && <MoveQualityBadge quality={whiteQ} />}
                       </button>
-                      {blackMove ? (
+                      {blackMove && blackQ ? (
+                        <button
+                          onClick={() => {
+                            if (!isChallengeActive) {
+                              setCurrentMoveIndex(blackIdx);
+                              setPositionFen(blackMove.fen);
+                            }
+                          }}
+                          className={`text-left px-1.5 py-0.5 rounded-xs transition-colors cursor-pointer flex items-center gap-1 ${
+                            currentMoveIndex === blackIdx
+                              ? 'font-semibold'
+                              : 'text-brand-ink hover:bg-brand-canvas-soft2'
+                          }`}
+                          style={currentMoveIndex === blackIdx ? { backgroundColor: blackQ ? QUALITY_BG[blackQ] : 'rgba(0,112,243,0.08)', color: blackQ ? QUALITY_COLOR[blackQ] : 'var(--color-brand-accent)' } : (blackQ && blackQ !== 'good' && blackQ !== 'best' ? { backgroundColor: QUALITY_BG[blackQ] } : {})}
+                        >
+                          {blackQ && <QualityDot quality={blackQ} />}
+                          <span>{blackMove.san}</span>
+                          {blackQ && <MoveQualityBadge quality={blackQ} />}
+                        </button>
+                      ) : blackMove ? (
                         <button
                           onClick={() => {
                             if (!isChallengeActive) {
@@ -694,13 +973,89 @@ export default function StoryPlayer({ story }: { story: StoryGame }) {
                           {blackMove.san}
                         </button>
                       ) : (
-                        <span></span>
+                        <span />
                       )}
                     </React.Fragment>
                   );
                 })}
               </div>
             </div>
+          </div>
+
+          {/* Accuracy & Stats Panel */}
+          <div className="bg-brand-canvas border border-brand-hairline rounded-md p-4 shadow-lvl2">
+            <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-brand-ink mb-3 select-none">
+              Game Accuracy
+            </h3>
+            {/* Accuracy bars */}
+            <div className="flex flex-col gap-3 mb-4">
+              {/* White */}
+              <div className="flex items-center gap-3">
+                <div className="w-16 shrink-0">
+                  <span className="text-[10px] font-mono text-brand-mute block">White</span>
+                  <span className="text-xl font-bold" style={{ color: '#f8fafc', textShadow: '0 0 8px rgba(255,255,255,0.3)' }}>
+                    {story.whiteAccuracy}%
+                  </span>
+                </div>
+                <div className="flex-grow">
+                  <div className="h-2 bg-brand-canvas-soft2 rounded-full overflow-hidden border border-brand-hairline">
+                    <div
+                      className="h-full rounded-full transition-all duration-700"
+                      style={{
+                        width: `${story.whiteAccuracy}%`,
+                        background: `linear-gradient(90deg, #22c55e, #4ade80)`,
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
+              {/* Black */}
+              <div className="flex items-center gap-3">
+                <div className="w-16 shrink-0">
+                  <span className="text-[10px] font-mono text-brand-mute block">Black</span>
+                  <span className="text-xl font-bold" style={{ color: '#94a3b8' }}>
+                    {story.blackAccuracy}%
+                  </span>
+                </div>
+                <div className="flex-grow">
+                  <div className="h-2 bg-brand-canvas-soft2 rounded-full overflow-hidden border border-brand-hairline">
+                    <div
+                      className="h-full rounded-full transition-all duration-700"
+                      style={{
+                        width: `${story.blackAccuracy}%`,
+                        background: `linear-gradient(90deg, #3b82f6, #60a5fa)`,
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Move breakdown */}
+            <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+              {([
+                ['brilliant', '!!', story.whiteStats.brilliant, story.blackStats.brilliant],
+                ['best', '✓', story.whiteStats.best + story.whiteStats.excellent, story.blackStats.best + story.blackStats.excellent],
+                ['book', '📖', story.whiteStats.book, story.blackStats.book],
+                ['mistake', '?', story.whiteStats.mistake, story.blackStats.mistake],
+                ['blunder', '??', story.whiteStats.blunder, story.blackStats.blunder],
+                ['dubious', '?!', story.whiteStats.dubious, story.blackStats.dubious],
+              ] as [MoveQuality | string, string, number, number][]).map(([q, symbol, w, b]) => (
+                <React.Fragment key={String(q)}>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-mono" style={{ color: QUALITY_COLOR[q as MoveQuality] ?? '#94a3b8' }}>
+                      {symbol} {QUALITY_LABEL[q as MoveQuality] ?? q}
+                    </span>
+                    <div className="flex gap-2 font-mono text-[10px]">
+                      <span style={{ color: '#f8fafc' }}>{w}</span>
+                      <span className="text-brand-mute">/</span>
+                      <span style={{ color: '#94a3b8' }}>{b}</span>
+                    </div>
+                  </div>
+                </React.Fragment>
+              ))}
+            </div>
+            <p className="text-[9px] font-mono text-brand-mute mt-2 text-right">White / Black</p>
           </div>
         </div>
       </div>
