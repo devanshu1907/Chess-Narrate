@@ -28,3 +28,20 @@ pnpm-debug.log*
 AGENTS.md
 skills-lock.json
 .gemini/
+
+# design documentation
+DESIGN.md
+
+# local test and log files
+dev-server-log.txt
+test-chess.js
+run-dev.js
+
+# evaluation scripts and helper files
+scripts/eval-log.txt
+scripts/evaluate-stories.mjs
+scripts/write-evaluation.mjs
+scripts/stories-data.json
+scripts/stories-data-utf8.json
+src/pages/evaluate-helper.astro
+

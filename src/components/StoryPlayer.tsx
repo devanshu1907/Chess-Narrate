@@ -768,10 +768,20 @@ export default function StoryPlayer({ story }: { story: StoryGame }) {
               <button
                 onClick={stepForward}
                 disabled={currentMoveIndex >= moves.length - 1 && isCompleted}
-                className="p-2 rounded-sm border border-brand-hairline bg-brand-canvas hover:bg-brand-canvas-soft2 text-brand-body disabled:opacity-30 transition-colors cursor-pointer disabled:cursor-not-allowed"
-                title="Next move"
+                className={`p-2 rounded-sm border transition-all cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center ${
+                  currentMoveIndex >= moves.length - 1 && !isCompleted
+                    ? 'border-brand-accent bg-brand-accent/15 text-brand-accent hover:bg-brand-accent/25 animate-pulse font-semibold px-3'
+                    : 'border-brand-hairline bg-brand-canvas hover:bg-brand-canvas-soft2 text-brand-body'
+                }`}
+                title={currentMoveIndex >= moves.length - 1 && !isCompleted ? "Finish Story" : "Next move"}
               >
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 18l6-6-6-6"></path></svg>
+                {currentMoveIndex >= moves.length - 1 && !isCompleted ? (
+                  <span className="text-[10px] font-mono tracking-tight flex items-center gap-1 uppercase">
+                    Finish <span className="text-xs">🏁</span>
+                  </span>
+                ) : (
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 18l6-6-6-6"></path></svg>
+                )}
               </button>
               <button
                 onClick={() => {

@@ -204,7 +204,7 @@ export default function ChessInterface() {
       
       // Parse Stockfish logs
       if (line === 'readyok') {
-        setEngineStatus('ready');
+        setEngineStatus(prev => prev === 'loading' ? 'ready' : prev);
       }
 
       // Parse score updates
@@ -279,7 +279,7 @@ export default function ChessInterface() {
 
   // Process evaluation queue
   useEffect(() => {
-    if ((engineStatus === 'ready' || engineStatus === 'idle') && evalQueue.length > 0 && workerRef.current) {
+    if (engineStatus === 'ready' && evalQueue.length > 0 && workerRef.current) {
       const nextFen = evalQueue[0];
       setEvalQueue(prev => prev.slice(1));
       
@@ -295,6 +295,9 @@ export default function ChessInterface() {
       evalTimeoutRef.current = setTimeout(() => {
         if (evaluatingFenRef.current === nextFen) {
           console.warn("Evaluation timed out for FEN:", nextFen);
+          if (workerRef.current) {
+            workerRef.current.postMessage('stop');
+          }
           setEvalCache(prev => ({ ...prev, [nextFen]: 0 }));
           setBestMovesCache(prev => ({ ...prev, [nextFen]: '(none)' }));
           evaluatingFenRef.current = null;
