@@ -6,7 +6,7 @@ import sitemap from '@astrojs/sitemap';
 
 // https://astro.build/config
 export default defineConfig({
-  site: 'https://chessnarrator.com',
+  site: 'https://chessnarrate.com',
   integrations: [
     react(),
     sitemap({

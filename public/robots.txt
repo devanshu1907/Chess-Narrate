@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://chessnarrator.com/sitemap-index.xml
+Sitemap: https://chessnarrate.com/sitemap-index.xml
