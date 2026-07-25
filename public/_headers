@@ -3,3 +3,6 @@
   Cross-Origin-Embedder-Policy: require-corp
 https://chessnarrate.pages.dev/*
   X-Robots-Tag: noindex
+
+https://:subdomain.chessnarrate.pages.dev/*
+  X-Robots-Tag: noindex
