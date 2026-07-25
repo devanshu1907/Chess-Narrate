@@ -1831,7 +1831,7 @@ Please write a cohesive, engaging summary paragraph of about 80-120 words. Focus
               : 'text-brand-body hover:bg-brand-canvas-soft2 border border-transparent'
           }`}
         >
-          🛡️ Analysis Board
+          Analysis Board
         </button>
         <button
           onClick={() => {
@@ -1844,7 +1844,7 @@ Please write a cohesive, engaging summary paragraph of about 80-120 words. Focus
               : 'text-brand-body hover:bg-brand-canvas-soft2 border border-transparent'
           }`}
         >
-          🤖 Play Against AI
+          Play Against AI
         </button>
       </div>
 
