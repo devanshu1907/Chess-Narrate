@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Chess } from 'chess.js';
 import { Chessboard } from 'react-chessboard';
+import { speakTextWithGemini, stopGeminiAudio, getBestLocalVoice } from '../utils/geminiTts';
 
 // Sample PGN game (Fried Liver Attack)
 const SAMPLE_PGN = `[Event "Casual Game"]
@@ -123,6 +124,8 @@ export default function ChessInterface() {
   const [narratorText, setNarratorText] = useState("Greetings, commander. Make a move on the board or load a game, and I'll analyze the strategic narrative.");
   const [displayedNarration, setDisplayedNarration] = useState('');
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
+  const [ttsStatus, setTtsStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const [ttsErrorMessage, setTtsErrorMessage] = useState('');
   const [autoSpeak, setAutoSpeak] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
@@ -168,6 +171,10 @@ export default function ChessInterface() {
 
     return () => {
       aiWorker.terminate();
+      stopGeminiAudio();
+      if (typeof window !== 'undefined' && window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+      }
     };
   }, []);
 
@@ -477,32 +484,43 @@ export default function ChessInterface() {
     };
   }, []);
 
-  // Handle autoplay stepping
+  // Handle autoplay stepping (waits for audio narration to finish)
   useEffect(() => {
-    if (isPlaying) {
-      autoplayTimerRef.current = setInterval(() => {
-        setCurrentMoveIndex((prevIndex) => {
-          if (prevIndex < moves.length - 1) {
-            const nextIndex = prevIndex + 1;
-            setPositionFen(moves[nextIndex].fen);
-            return nextIndex;
-          } else {
-            setIsPlaying(false);
-            if (autoplayTimerRef.current) clearInterval(autoplayTimerRef.current);
-            return prevIndex;
-          }
-        });
-      }, 3500); // Slower for autoplay so users have time to read/listen to narration
-    } else {
-      if (autoplayTimerRef.current) {
-        clearInterval(autoplayTimerRef.current);
-        autoplayTimerRef.current = null;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
+    const step = () => {
+      if (!isPlaying) return;
+
+      // If audio is currently playing, check again in 500ms
+      if (isPlayingAudio) {
+        timeoutId = setTimeout(step, 500);
+        return;
       }
-    }
-    return () => {
-      if (autoplayTimerRef.current) clearInterval(autoplayTimerRef.current);
+
+      setCurrentMoveIndex((prevIndex) => {
+        if (prevIndex < moves.length - 1) {
+          const nextIndex = prevIndex + 1;
+          setPositionFen(moves[nextIndex].fen);
+          
+          // Schedule next step in 3500ms
+          timeoutId = setTimeout(step, 3500);
+          return nextIndex;
+        } else {
+          setIsPlaying(false);
+          return prevIndex;
+        }
+      });
     };
-  }, [isPlaying, moves]);
+
+    if (isPlaying) {
+      // Start the autoplay timer
+      timeoutId = setTimeout(step, 3500);
+    }
+
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+    };
+  }, [isPlaying, isPlayingAudio, moves]);
 
   // Trigger synthesized sound effects on move changes
   const prevMoveIndexRef = useRef(currentMoveIndex);
@@ -556,34 +574,68 @@ export default function ChessInterface() {
 
   // Speak narrator commentary (TTS)
   const speakText = (text: string) => {
+    // 1. Always stop any ongoing Gemini audio
+    stopGeminiAudio();
+    
+    // 2. Always cancel any ongoing browser speech
+    if (typeof window !== 'undefined' && window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+    }
+
+    const cleanText = text
+      .replace(/\[.*?\]/g, '') // strip brackets
+      .replace(/Challenge!/g, '') // strip challenge exclamation
+      .replace(/\b\d+\.\s*(\.+\s*)?/g, '') // strip move numbers like "1." or "12. ..."
+      .replace(/[+#]/g, '') // strip check (+) and checkmate (#) symbols
+      .trim();
+    
+    if (!cleanText) return;
+
+    // 3. If Gemini is enabled and key is available, use Gemini TTS
+    if (useGemini && geminiApiKey.trim()) {
+      setIsPlayingAudio(true);
+      speakTextWithGemini(cleanText, narratorPersonality, geminiApiKey)
+        .then(() => {
+          setIsPlayingAudio(false);
+          setTtsStatus('success');
+          setTtsErrorMessage('');
+        })
+        .catch((err) => {
+          console.error("Gemini TTS playback failed, falling back to Web Speech:", err);
+          setTtsStatus('error');
+          setTtsErrorMessage(err.message || String(err));
+          fallbackSpeak(cleanText);
+        });
+    } else {
+      // 4. Otherwise use fallback local browser speech synthesis
+      fallbackSpeak(cleanText);
+    }
+  };
+
+  const fallbackSpeak = (cleanText: string) => {
     if (typeof window === 'undefined' || !window.speechSynthesis) return;
     
-    window.speechSynthesis.cancel();
-    
-    const cleanText = text.replace(/\[.*?\]/g, ''); // strip any brackets
     const utterance = new SpeechSynthesisUtterance(cleanText);
-    
-    // Choose voice based on personality
     const voices = window.speechSynthesis.getVoices();
-    let selectedVoice = null;
-    
-    if (narratorPersonality === 'pirate') {
-      // Pirate sounds better with a deeper British voice if available
-      selectedVoice = voices.find(v => v.lang.startsWith('en-GB')) || voices.find(v => v.lang.startsWith('en-'));
-      utterance.pitch = 0.75;
-      utterance.rate = 0.95;
-    } else if (narratorPersonality === 'grandmaster') {
-      selectedVoice = voices.find(v => v.lang.startsWith('en-GB')) || voices.find(v => v.lang.startsWith('en-'));
-      utterance.pitch = 0.9;
-      utterance.rate = 0.9;
-    } else {
-      selectedVoice = voices.find(v => v.lang.startsWith('en-US')) || voices.find(v => v.lang.startsWith('en-'));
-      utterance.pitch = 1.0;
-      utterance.rate = 1.05;
-    }
+    const selectedVoice = getBestLocalVoice(voices, narratorPersonality);
     
     if (selectedVoice) {
       utterance.voice = selectedVoice;
+    }
+    
+    // Choose pitch and rate based on personality
+    if (narratorPersonality === 'pirate') {
+      utterance.pitch = 0.7;
+      utterance.rate = 0.9;
+    } else if (narratorPersonality === 'grandmaster') {
+      utterance.pitch = 0.85;
+      utterance.rate = 0.95;
+    } else if (narratorPersonality === 'supportive') {
+      utterance.pitch = 1.05;
+      utterance.rate = 1.0;
+    } else {
+      utterance.pitch = 1.0;
+      utterance.rate = 1.05;
     }
     
     utterance.onend = () => setIsPlayingAudio(false);
@@ -2139,6 +2191,16 @@ Please write a cohesive, engaging summary paragraph of about 80-120 words. Focus
                     placeholder="AIzaSy..."
                     className="w-full bg-brand-canvas border border-brand-hairline rounded-sm px-2.5 py-1 text-xs font-mono text-brand-ink focus-visible:ring-1 focus-visible:ring-brand-accent focus-visible:outline-hidden"
                   />
+                  {ttsStatus === 'error' && (
+                    <span className="text-[9px] text-rose-400 font-mono mt-1 leading-normal select-none">
+                      ⚠️ Gemini TTS failed: {ttsErrorMessage} (Fell back to browser voice).
+                    </span>
+                  )}
+                  {ttsStatus === 'success' && (
+                    <span className="text-[9px] text-emerald-400 font-mono mt-1 select-none">
+                      ✨ Gemini TTS Active
+                    </span>
+                  )}
                 </div>
               </div>
             </div>

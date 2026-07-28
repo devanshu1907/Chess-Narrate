@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Chess } from 'chess.js';
 import { Chessboard } from 'react-chessboard';
 import type { StoryGame, MoveQuality } from '../data/stories';
+import { speakTextWithGemini, stopGeminiAudio, getBestLocalVoice } from '../utils/geminiTts';
 
 // ── Move quality helpers ──────────────────────────────────────────────────────
 
@@ -200,6 +201,19 @@ function saveBadge(slug: string, accuracy: number) {
 type Personality = 'sarcastic' | 'supportive' | 'grandmaster' | 'pirate';
 
 export default function StoryPlayer({ story }: { story: StoryGame }) {
+  // Gemini API states
+  const [geminiApiKey, setGeminiApiKey] = useState('');
+  const [useGemini, setUseGemini] = useState(false);
+
+  // Load API key from local storage on mount
+  useEffect(() => {
+    const savedKey = localStorage.getItem('chess_narrator_gemini_key');
+    if (savedKey) {
+      setGeminiApiKey(savedKey);
+      setUseGemini(true);
+    }
+  }, []);
+
   // Parse PGN into moves
   const [moves, setMoves] = useState<MoveItem[]>([]);
   const [currentMoveIndex, setCurrentMoveIndex] = useState(-1);
@@ -241,6 +255,7 @@ export default function StoryPlayer({ story }: { story: StoryGame }) {
   // Cancel speech on unmount
   useEffect(() => {
     return () => {
+      stopGeminiAudio();
       if (typeof window !== 'undefined' && window.speechSynthesis) {
         window.speechSynthesis.cancel();
       }
@@ -249,33 +264,64 @@ export default function StoryPlayer({ story }: { story: StoryGame }) {
 
   // Speak narrator commentary (TTS)
   const speakText = (text: string) => {
+    // 1. Always stop any ongoing Gemini audio
+    stopGeminiAudio();
+    
+    // 2. Always cancel any ongoing browser speech
+    if (typeof window !== 'undefined' && window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+    }
+
+    const cleanText = text
+      .replace(/\[.*?\]/g, '') // strip brackets
+      .replace(/Challenge!/g, '') // strip challenge exclamation
+      .replace(/\b\d+\.\s*(\.+\s*)?/g, '') // strip move numbers like "1." or "12. ..."
+      .replace(/[+#]/g, '') // strip check (+) and checkmate (#) symbols
+      .trim();
+    
+    if (!cleanText) return;
+
+    // 3. If Gemini is enabled and key is available, use Gemini TTS
+    if (useGemini && geminiApiKey.trim()) {
+      setIsPlayingAudio(true);
+      speakTextWithGemini(cleanText, personality, geminiApiKey)
+        .then(() => {
+          setIsPlayingAudio(false);
+        })
+        .catch((err) => {
+          console.error("Gemini TTS playback failed, falling back to Web Speech:", err);
+          fallbackSpeak(cleanText);
+        });
+    } else {
+      // 4. Otherwise use fallback local browser speech synthesis
+      fallbackSpeak(cleanText);
+    }
+  };
+
+  const fallbackSpeak = (cleanText: string) => {
     if (typeof window === 'undefined' || !window.speechSynthesis) return;
     
-    window.speechSynthesis.cancel();
-    
-    const cleanText = text.replace(/\[.*?\]/g, '').replace(/Challenge!/g, ''); // strip brackets and Challenge exclamation
     const utterance = new SpeechSynthesisUtterance(cleanText);
-    
-    // Choose voice based on personality
     const voices = window.speechSynthesis.getVoices();
-    let selectedVoice = null;
-    
-    if (personality === 'pirate') {
-      selectedVoice = voices.find(v => v.lang.startsWith('en-GB')) || voices.find(v => v.lang.startsWith('en-'));
-      utterance.pitch = 0.75;
-      utterance.rate = 0.95;
-    } else if (personality === 'grandmaster') {
-      selectedVoice = voices.find(v => v.lang.startsWith('en-GB')) || voices.find(v => v.lang.startsWith('en-'));
-      utterance.pitch = 0.9;
-      utterance.rate = 0.9;
-    } else {
-      selectedVoice = voices.find(v => v.lang.startsWith('en-US')) || voices.find(v => v.lang.startsWith('en-'));
-      utterance.pitch = 1.0;
-      utterance.rate = 1.05;
-    }
+    const selectedVoice = getBestLocalVoice(voices, personality);
     
     if (selectedVoice) {
       utterance.voice = selectedVoice;
+    }
+    
+    // Choose pitch and rate based on personality
+    if (personality === 'pirate') {
+      utterance.pitch = 0.7;
+      utterance.rate = 0.9;
+    } else if (personality === 'grandmaster') {
+      utterance.pitch = 0.85;
+      utterance.rate = 0.95;
+    } else if (personality === 'supportive') {
+      utterance.pitch = 1.05;
+      utterance.rate = 1.0;
+    } else {
+      utterance.pitch = 1.0;
+      utterance.rate = 1.05;
     }
     
     utterance.onend = () => setIsPlayingAudio(false);
@@ -343,33 +389,47 @@ export default function StoryPlayer({ story }: { story: StoryGame }) {
     return () => clearInterval(interval);
   }, [narratorText]);
 
-  // Autoplay
+  // Autoplay (waits for audio narration to finish)
   useEffect(() => {
-    if (isAutoPlaying && !isChallengeActive) {
-      autoplayRef.current = setInterval(() => {
-        setCurrentMoveIndex((prev) => {
-          const next = prev + 1;
-          if (next >= moves.length) {
-            setIsAutoPlaying(false);
-            return prev;
-          }
-          // Check if next move is a challenge
-          if (story.challengeMoves.includes(next)) {
-            setIsAutoPlaying(false);
-            return prev;
-          }
-          setPositionFen(moves[next].fen);
-          return next;
-        });
-      }, 2500);
-    } else if (autoplayRef.current) {
-      clearInterval(autoplayRef.current);
-      autoplayRef.current = null;
-    }
-    return () => {
-      if (autoplayRef.current) clearInterval(autoplayRef.current);
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
+    const step = () => {
+      if (!isAutoPlaying || isChallengeActive) return;
+
+      // If audio is currently playing, check again in 500ms
+      if (isPlayingAudio) {
+        timeoutId = setTimeout(step, 500);
+        return;
+      }
+
+      setCurrentMoveIndex((prev) => {
+        const next = prev + 1;
+        if (next >= moves.length) {
+          setIsAutoPlaying(false);
+          return prev;
+        }
+        // Check if next move is a challenge
+        if (story.challengeMoves.includes(next)) {
+          setIsAutoPlaying(false);
+          return prev;
+        }
+        setPositionFen(moves[next].fen);
+        
+        // Schedule next step in 2500ms
+        timeoutId = setTimeout(step, 2500);
+        return next;
+      });
     };
-  }, [isAutoPlaying, isChallengeActive, moves, story]);
+
+    if (isAutoPlaying && !isChallengeActive) {
+      // Start the autoplay timer
+      timeoutId = setTimeout(step, 2500);
+    }
+
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+    };
+  }, [isAutoPlaying, isChallengeActive, isPlayingAudio, moves, story]);
 
   // Trigger synthesized sound effects on move changes
   useEffect(() => {
