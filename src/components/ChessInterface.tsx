@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Chess } from 'chess.js';
 import { Chessboard } from 'react-chessboard';
 import { speakTextWithGemini, stopGeminiAudio, getBestLocalVoice } from '../utils/geminiTts';
+import { motion, AnimatePresence } from 'framer-motion';
+import { animate } from 'animejs';
 
 // Sample PGN game (Fried Liver Attack)
 const SAMPLE_PGN = `[Event "Casual Game"]
@@ -138,6 +140,8 @@ export default function ChessInterface() {
   const autoplayTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const workerRef = useRef<Worker | null>(null);
   const aiWorkerRef = useRef<Worker | null>(null);
+  const chartPathRef = useRef<SVGPathElement>(null);
+  const prevChartPathRef = useRef('');
   const evaluatingFenRef = useRef<string | null>(null);
   const tempScoreRef = useRef<number>(0);
   const tempIsMateRef = useRef<boolean>(false);
@@ -571,6 +575,64 @@ export default function ChessInterface() {
 
     return () => clearInterval(interval);
   }, [narratorText]);
+
+  // Compute chart path for Anime.js animation
+  const getChartPathD = () => {
+    if (moves.length === 0) return '';
+    const width = 500;
+    const height = 120;
+    const padding = 15;
+    const points: { x: number; y: number }[] = [];
+    
+    const startScoreVal = evalCache[loadedFenStart];
+    const startScore = startScoreVal !== undefined ? Math.max(-800, Math.min(800, startScoreVal)) / 100 : 0;
+    points.push({
+      x: padding,
+      y: height / 2 - (startScore / 8) * (height / 2 - padding)
+    });
+    
+    moves.forEach((move, idx) => {
+      const scoreVal = evalCache[move.fen];
+      const score = scoreVal !== undefined ? Math.max(-800, Math.min(800, scoreVal)) / 100 : 0;
+      const x = padding + (idx + 1) * ((width - padding * 2) / moves.length);
+      const y = height / 2 - (score / 8) * (height / 2 - padding);
+      points.push({ x, y });
+    });
+    
+    let pathD = '';
+    points.forEach((pt, i) => {
+      if (i === 0) pathD += `M ${pt.x} ${pt.y}`;
+      else pathD += ` L ${pt.x} ${pt.y}`;
+    });
+    return pathD;
+  };
+
+  const chartPathD = getChartPathD();
+
+  useEffect(() => {
+    if (!chartPathD) {
+      prevChartPathRef.current = '';
+      return;
+    }
+    if (chartPathRef.current) {
+      if (!prevChartPathRef.current) {
+        chartPathRef.current.setAttribute('d', chartPathD);
+        prevChartPathRef.current = chartPathD;
+      } else {
+        animate(chartPathRef.current, {
+          d: [
+            { value: prevChartPathRef.current },
+            { value: chartPathD }
+          ],
+          easing: 'easeOutQuad',
+          duration: 350,
+          onComplete: () => {
+            prevChartPathRef.current = chartPathD;
+          }
+        });
+      }
+    }
+  }, [chartPathD]);
 
   // Speak narrator commentary (TTS)
   const speakText = (text: string) => {
@@ -1534,36 +1596,52 @@ Please write a cohesive, engaging summary paragraph of about 80-120 words. Focus
             <text x={padding + 5} y={padding + 8} className="text-[8px] font-mono fill-brand-body" opacity="0.6">White +8.0</text>
             <text x={padding + 5} y={height - padding + 5} className="text-[8px] font-mono fill-brand-body" opacity="0.6">Black +8.0</text>
             
-            {/* Main Line path */}
+            {/* Main Line path (Animated via Anime.js) */}
             {pathD && (
               <path 
-                d={pathD} 
+                ref={chartPathRef}
+                d={prevChartPathRef.current || pathD}
                 fill="none" 
                 stroke="var(--color-brand-accent)" 
                 strokeWidth="2.5" 
                 strokeLinecap="round"
                 strokeLinejoin="round"
-                className="transition-all duration-300"
               />
             )}
             
             {/* Clickable node points */}
-            {points.map((pt, i) => (
-              <g key={i} className="group cursor-pointer" onClick={() => jumpToMove(pt.index)}>
-                <circle 
-                  cx={pt.x} 
-                  cy={pt.y} 
-                  r={currentMoveIndex === pt.index ? 5.5 : 3.5} 
-                  fill={currentMoveIndex === pt.index ? 'var(--color-brand-accent)' : 'var(--color-brand-canvas)'} 
-                  stroke="var(--color-brand-accent)" 
-                  strokeWidth={currentMoveIndex === pt.index ? 2 : 1.5}
-                  className="transition-all hover:scale-150 duration-150"
-                />
-                <title>
-                  {pt.index === -1 ? 'Start' : `Move ${Math.floor(pt.index / 2) + 1} ${pt.index % 2 === 0 ? 'White' : 'Black'}`} ({pt.score > 0 ? '+' : ''}{pt.score.toFixed(1)})
-                </title>
-              </g>
-            ))}
+            {points.map((pt, i) => {
+              const isActive = currentMoveIndex === pt.index;
+              return (
+                <g key={i} className="group cursor-pointer" onClick={() => jumpToMove(pt.index)}>
+                  {isActive ? (
+                    <motion.circle 
+                      cx={pt.x} 
+                      cy={pt.y} 
+                      initial={{ r: 3.5 }}
+                      animate={{ r: [3.5, 6.5, 5.5] }}
+                      transition={{ type: 'spring', stiffness: 300, damping: 15 }}
+                      fill="var(--color-brand-accent)" 
+                      stroke="var(--color-brand-accent)" 
+                      strokeWidth={2}
+                    />
+                  ) : (
+                    <circle 
+                      cx={pt.x} 
+                      cy={pt.y} 
+                      r={3.5} 
+                      fill="var(--color-brand-canvas)" 
+                      stroke="var(--color-brand-accent)" 
+                      strokeWidth={1.5}
+                      className="transition-all hover:scale-150 duration-150"
+                    />
+                  )}
+                  <title>
+                    {pt.index === -1 ? 'Start' : `Move ${Math.floor(pt.index / 2) + 1} ${pt.index % 2 === 0 ? 'White' : 'Black'}`} ({pt.score > 0 ? '+' : ''}{pt.score.toFixed(1)})
+                  </title>
+                </g>
+              );
+            })}
           </svg>
         </div>
       </div>
@@ -1833,10 +1911,20 @@ Please write a cohesive, engaging summary paragraph of about 80-120 words. Focus
 
           {/* Typewritten comment text */}
           <div className="flex-grow">
-            <p className="text-sm text-brand-ink leading-relaxed font-sans min-h-[80px] sm:min-h-[56px]">
-              {displayedNarration}
-              <span className="inline-block w-1.5 h-3 bg-brand-accent ml-0.5 animate-pulse" />
-            </p>
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={narratorText}
+                initial={{ opacity: 0, y: 4 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.15 }}
+              >
+                <p className="text-sm text-brand-ink leading-relaxed font-sans min-h-[80px] sm:min-h-[56px]">
+                  {displayedNarration}
+                  <span className="inline-block w-1.5 h-3 bg-brand-accent ml-0.5 animate-pulse" />
+                </p>
+              </motion.div>
+            </AnimatePresence>
             
             {/* Dynamic move rating sub-label */}
             {currentMoveIndex !== -1 && getMoveQualityInfo(currentMoveIndex) && (
@@ -1932,10 +2020,11 @@ Please write a cohesive, engaging summary paragraph of about 80-120 words. Focus
             
             {/* Vertical Evaluation Bar */}
             <div className="w-5 md:w-6 shrink-0 flex flex-col justify-between py-2 relative rounded-md bg-brand-primary border border-brand-hairline overflow-hidden select-none shadow-lvl1">
-              {/* White advantage fill (animating height from bottom) */}
-              <div 
-                className="absolute bottom-0 left-0 right-0 bg-brand-on-primary transition-all duration-500 ease-out" 
-                style={{ height: `${evalPercent}%` }}
+              {/* White advantage fill (animating height from bottom via Framer Motion) */}
+              <motion.div 
+                className="absolute bottom-0 left-0 right-0 bg-brand-on-primary" 
+                animate={{ height: `${evalPercent}%` }}
+                transition={{ type: 'spring', stiffness: 85, damping: 16 }}
               />
               {/* Numeric Evaluation text overlay (vertical) */}
               <div className="absolute inset-x-0 top-3 text-center text-[9px] font-mono font-bold z-10 mix-blend-difference text-brand-on-primary select-none">
@@ -2155,13 +2244,20 @@ Please write a cohesive, engaging summary paragraph of about 80-120 words. Focus
                     <button
                       key={p}
                       onClick={() => setNarratorPersonality(p)}
-                      className={`px-3 py-1.5 rounded-sm text-xs font-mono capitalize border transition-all ${
+                      className={`relative px-3 py-1.5 rounded-sm text-xs font-mono capitalize border transition-colors duration-200 select-none ${
                         narratorPersonality === p
-                          ? 'border-brand-accent bg-brand-accent/5 text-brand-accent font-semibold shadow-xs'
+                          ? 'border-brand-accent text-brand-accent font-semibold shadow-xs'
                           : 'border-brand-hairline hover:bg-brand-canvas hover:border-brand-hairline-strong text-brand-body'
                       }`}
                     >
-                      {p}
+                      {narratorPersonality === p && (
+                        <motion.div
+                          layoutId="active-personality-pill"
+                          className="absolute inset-0 bg-brand-accent/5 rounded-sm pointer-events-none"
+                          transition={{ type: 'spring', stiffness: 350, damping: 28 }}
+                        />
+                      )}
+                      <span className="relative z-10">{p}</span>
                     </button>
                   ))}
                 </div>

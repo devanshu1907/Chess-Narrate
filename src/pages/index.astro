@@ -1,6 +1,7 @@
 ---
 import Layout from '../layouts/Layout.astro';
 import ChessInterface from '../components/ChessInterface';
+import StoryGlowCard from '../components/StoryGlowCard';
 import { STORIES } from '../data/stories';
 ---
 
@@ -33,18 +34,14 @@ import { STORIES } from '../data/stories';
 			<!-- Stories Grid -->
 			<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 mt-2">
 				{STORIES.slice(0, 3).map((story) => (
-					<a 
-						href={`/stories/${story.slug}`} 
-						class="group flex flex-col gap-3 p-5 rounded-md border border-brand-hairline bg-brand-canvas hover:bg-brand-canvas-soft2 hover:border-brand-accent/30 transition-all duration-200 shadow-lvl1 hover:shadow-lvl3 cursor-pointer"
-					>
-						<div class="flex items-center justify-between">
-							<span class="text-2xl">{story.badge.icon}</span>
-							<span class="text-[10px] font-mono text-brand-mute border border-brand-hairline rounded-full px-2 py-0.5">{story.year}</span>
-						</div>
-						<h3 class="text-base font-semibold tracking-tight text-brand-ink group-hover:text-brand-accent transition-colors">{story.title}</h3>
-						<p class="text-xs text-brand-body leading-relaxed line-clamp-2 flex-grow">{story.description}</p>
-						<span class="text-xs font-semibold text-brand-accent mt-2 group-hover:translate-x-0.5 transition-transform">Play Story &rarr;</span>
-					</a>
+					<StoryGlowCard 
+						client:load
+						href={`/stories/${story.slug}`}
+						year={story.year}
+						icon={story.badge.icon}
+						title={story.title}
+						description={story.description}
+					/>
 				))}
 			</div>
 			<a href="/stories" class="text-sm font-semibold text-brand-accent hover:underline flex items-center gap-1.5 w-fit mt-2">
